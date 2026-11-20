@@ -1,0 +1,7 @@
+langgraph>=0.3
+openai>=1.0
+pillow>=10.0
+xai-sdk
+requests
+python-dotenv
+langsmith

@@ -1,0 +1,9 @@
+pydantic
+pillow
+pytest
+langgraph
+openai
+pillow
+xai-sdk
+requests
+python-dotenv
