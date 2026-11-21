@@ -145,20 +145,23 @@ export interface AnimationPlan {
 
 export interface Scene {
   id: string;
+  invitation_id?: string;
   order: number;
   title: string;
   imageUrl: string;
   imagePrompt: string;
-  imageStatus: 'pending' | 'generating' | 'done';
+  imageStatus: 'pending' | 'generating' | 'done' | 'failed';
   confirmed: boolean;
   durationSec: number;
   transitionAfter: PageTransition;
   textLayer: TextLayer;
   animationPlan: AnimationPlan;
+  videoUrl?: string | null;
 }
 
 export interface Invitation {
   id: string;
+  invitation_id?: string;
   title: string;
   type: InvitationType;
   status: InvitationStatus;

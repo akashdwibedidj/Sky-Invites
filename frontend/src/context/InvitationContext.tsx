@@ -25,6 +25,7 @@ interface InvitationContextValue {
   updateActiveDetails: (details: Partial<InvitationDetails>, title?: string) => void;
   updateActiveDesign: (design: Partial<DesignPreferences>) => void;
   setActiveScenes: (scenes: Scene[], status?: Invitation['status']) => void;
+  setInvitationId: (id: string) => void;
   updateScene: (sceneId: string, updater: (scene: Scene) => Scene) => void;
   updateSceneTextLayer: (sceneId: string, updater: (layer: TextLayer) => TextLayer) => void;
   updateSceneAnimationPlan: (sceneId: string, updater: (plan: AnimationPlan) => AnimationPlan) => void;
@@ -144,13 +145,30 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     [updateActiveInvitation]
   );
 
-  const setActiveScenes = useCallback(
-    (scenes: Scene[], status?: Invitation['status']) => {
+  const setInvitationId = useCallback(
+    (id: string) => {
       updateActiveInvitation((inv) => ({
         ...inv,
-        status: status ?? inv.status,
-        scenes,
+        id,
+        invitation_id: id,
       }));
+      setActiveInvitationId(id);
+    },
+    [updateActiveInvitation]
+  );
+
+  const setActiveScenes = useCallback(
+    (scenes: Scene[], status?: Invitation['status']) => {
+      updateActiveInvitation((inv) => {
+        const invId = scenes[0]?.invitation_id || inv.invitation_id || inv.id;
+        return {
+          ...inv,
+          id: invId,
+          invitation_id: invId,
+          status: status ?? inv.status,
+          scenes,
+        };
+      });
       if (scenes.length > 0) {
         setSelectedSceneId((prev) =>
           prev && scenes.some((s) => s.id === prev) ? prev : scenes[0].id
@@ -238,6 +256,7 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updateActiveDetails,
         updateActiveDesign,
         setActiveScenes,
+        setInvitationId,
         updateScene,
         updateSceneTextLayer,
         updateSceneAnimationPlan,

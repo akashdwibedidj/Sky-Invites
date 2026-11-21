@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, CircleDashed, Loader2, Sparkles } from 'lucide-react';
+import { CheckCircle2, CircleDashed, Loader2, RotateCcw, Sparkles } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
-import { createScenes, generateImages } from '../services/api';
+import { createScenes, generateImages, regenerateImage } from '../services/api';
 import { AgentPipelineNode, Scene } from '../types/invitation';
 
 const INITIAL_NODES: AgentPipelineNode[] = [
@@ -61,11 +61,36 @@ const NodeStatusIcon: React.FC<{ status: AgentPipelineNode['status'] }> = ({ sta
 };
 
 export const GenerationProgressScreen: React.FC = () => {
-  const { activeInvitation, setActiveScenes, updateActiveStatus, navigateTo } = useInvitations();
+  const { activeInvitation, setActiveScenes, updateScene, updateActiveStatus, navigateTo } = useInvitations();
   const [nodes, setNodes] = useState<AgentPipelineNode[]>(INITIAL_NODES);
   const [sceneChips, setSceneChips] = useState<Scene[]>([]);
   const [isFinished, setIsFinished] = useState(false);
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const hasStartedRef = useRef(false);
+
+  const handleRetryScene = async (sc: Scene) => {
+    setRetryingIds((prev) => new Set(prev).add(sc.id));
+    setSceneChips((prev) =>
+      prev.map((s) => (s.id === sc.id ? { ...s, imageStatus: 'generating' } : s))
+    );
+    try {
+      const updated = await regenerateImage(sc, sc.imagePrompt);
+      setSceneChips((prev) =>
+        prev.map((s) => (s.id === sc.id ? updated : s))
+      );
+      updateScene(sc.id, () => updated);
+    } catch (err) {
+      setSceneChips((prev) =>
+        prev.map((s) => (s.id === sc.id ? { ...s, imageStatus: 'failed' } : s))
+      );
+    } finally {
+      setRetryingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sc.id);
+        return next;
+      });
+    }
+  };
 
   const updateNode = (
     id: string,
@@ -163,27 +188,40 @@ export const GenerationProgressScreen: React.FC = () => {
       const completedScenes = await generateImages(
         generatedScenes,
         activeInvitation.design.storyDriven,
-        (sceneId, status) => {
+        (sceneId, status, imageUrl) => {
           if (cancelled) return;
           setSceneChips((prev) =>
-            prev.map((sc) => (sc.id === sceneId ? { ...sc, imageStatus: status } : sc))
+            prev.map((sc) =>
+              sc.id === sceneId
+                ? {
+                    ...sc,
+                    imageStatus: status,
+                    ...(imageUrl ? { imageUrl } : {}),
+                  }
+                : sc
+            )
           );
         }
       );
 
       if (cancelled) return;
+      const anyFailed = completedScenes.some((s) => s.imageStatus === 'failed');
       updateNode(
         'image-generator',
-        'done',
-        `All ${completedScenes.length} 9:16 backgrounds ready for layer review.`
+        anyFailed ? 'running' : 'done',
+        anyFailed
+          ? `${completedScenes.filter((s) => s.imageStatus === 'done').length} of ${completedScenes.length} scenes ready. Some failed, please retry.`
+          : `All ${completedScenes.length} 9:16 backgrounds ready for layer review.`
       );
 
       setActiveScenes(completedScenes, 'Draft');
       setIsFinished(true);
 
-      await new Promise((r) => setTimeout(r, 650));
-      if (!cancelled) {
-        navigateTo('step-3-review');
+      if (!anyFailed) {
+        await new Promise((r) => setTimeout(r, 650));
+        if (!cancelled) {
+          navigateTo('step-3-review');
+        }
       }
     };
 
@@ -192,7 +230,7 @@ export const GenerationProgressScreen: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeInvitation, navigateTo, setActiveScenes, updateActiveStatus]);
+  }, [activeInvitation, navigateTo, setActiveScenes, updateScene, updateActiveStatus]);
 
   if (!activeInvitation) {
     return null;
@@ -299,7 +337,9 @@ export const GenerationProgressScreen: React.FC = () => {
                         ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900'
                         : sc.imageStatus === 'generating'
                           ? 'border-[#E3D3BA] bg-[#FAF6EE] text-[#8F6534]'
-                          : 'border-stone-200 bg-stone-50 text-stone-500'
+                          : sc.imageStatus === 'failed'
+                            ? 'border-rose-200 bg-rose-50/60 text-rose-900'
+                            : 'border-stone-200 bg-stone-50 text-stone-500'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -319,6 +359,20 @@ export const GenerationProgressScreen: React.FC = () => {
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           <span>Rendering</span>
                         </>
+                      ) : sc.imageStatus === 'failed' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRetryScene(sc)}
+                          disabled={retryingIds.has(sc.id)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-100 hover:bg-rose-200 text-rose-800 text-[11px] font-medium transition-colors cursor-pointer"
+                        >
+                          {retryingIds.has(sc.id) ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3 h-3" />
+                          )}
+                          <span>Retry</span>
+                        </button>
                       ) : (
                         <span>Waiting</span>
                       )}

@@ -7,7 +7,37 @@ import {
   TextLine,
 } from '../types/invitation';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+let currentInvitationId: string = '';
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function resolveMediaUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+export function extractInvitationId(scene?: Scene, fallbackId?: string): { invitationId: string; sceneIndex: number } {
+  if (!scene) {
+    return { invitationId: fallbackId || currentInvitationId || '', sceneIndex: 0 };
+  }
+  if (scene.invitation_id) {
+    const idx = scene.order !== undefined ? scene.order - 1 : 0;
+    return { invitationId: scene.invitation_id, sceneIndex: idx };
+  }
+  const match = scene.id?.match(/^sc-(.+)-(\d+)$/);
+  if (match) {
+    return { invitationId: match[1], sceneIndex: parseInt(match[2], 10) };
+  }
+  return {
+    invitationId: fallbackId || currentInvitationId || '',
+    sceneIndex: Math.max(0, (scene.order || 1) - 1),
+  };
+}
 
 function getDisplayCoupleOrHonoree(inv: Invitation): string {
   const { brideName, groomName, honoreeName, hostName } = inv.details;
@@ -101,125 +131,255 @@ function getSceneTextColor(imageUrl: string, paletteText: string): string {
 
 /**
  * 1. createScenes
- * Simulates LangGraph Scene Splitter + Designer + Font Specialist nodes
- * producing structured 9:16 scene blueprints with separate text layers.
+ * Calls POST /api/create-scenes, polls /status until stage 1 is done,
+ * then GETs the invitation and returns real Scene[] in the existing shape.
  */
 export async function createScenes(invitation: Invitation): Promise<Scene[]> {
-  await delay(650);
-  const count = Math.max(1, Math.min(12, invitation.design.sceneCount));
-  const scenes: Scene[] = [];
+  const res = await fetch(`${API_URL}/api/create-scenes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ invitation }),
+  });
 
-  for (let i = 0; i < count; i++) {
-    const imageUrl = getSceneImageByIndex(i, invitation.design.theme);
-    const eventName =
-      i === 0
-        ? 'Opening Title'
-        : i === count - 1 && count > 2
-          ? 'RSVP & Closing'
-          : invitation.details.events[(i - 1) % Math.max(1, invitation.details.events.length)]?.name ||
-            `Chapter ${i + 1}`;
-
-    scenes.push({
-      id: `sc-${Date.now()}-${i + 1}`,
-      order: i + 1,
-      title: eventName,
-      imageUrl,
-      imagePrompt: `${invitation.design.theme} ${invitation.type.toLowerCase()} invitation background for "${eventName}", ${invitation.design.palette.name} palette, vertical 9:16 stationery framing with open center space for typography.`,
-      imageStatus: 'pending',
-      confirmed: false,
-      durationSec: invitation.design.durationPerScene,
-      transitionAfter: invitation.design.transition,
-      textLayer: {
-        lines: buildSceneLines(invitation, i, count),
-        headingFont: invitation.design.headingFont,
-        bodyFont: invitation.design.bodyFont,
-        fontSize: 22,
-        color: getSceneTextColor(imageUrl, invitation.design.palette.text),
-        alignment: invitation.design.textAlignment,
-        placement: invitation.design.textPlacement,
-        xOffset: imageUrl.includes('reception_ivory_arch') ? 5 : 0,
-        yOffset: 0,
-        animation: invitation.design.textAnimation,
-        sequentialDelayMs: 250,
-      },
-      animationPlan: buildDefaultAnimationPlan(eventName, invitation.design.theme),
-    });
+  if (!res.ok) {
+    throw new Error(`Failed to create scenes: ${res.status} ${res.statusText}`);
   }
+
+  const data: { invitation_id: string; status: string } = await res.json();
+  const invitationId = data.invitation_id;
+  currentInvitationId = invitationId;
+  invitation.id = invitationId;
+  invitation.invitation_id = invitationId;
+
+  // Poll /api/invitations/{id}/status until stage1_done (or failed)
+  const maxPolls = 60;
+  for (let i = 0; i < maxPolls; i++) {
+    await delay(1500);
+    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+    if (!statusRes.ok) continue;
+    const statusData = await statusRes.json();
+    if (statusData.status === 'stage1_done') {
+      break;
+    }
+    if (statusData.status === 'failed') {
+      throw new Error(`Scene creation failed for invitation ${invitationId}`);
+    }
+  }
+
+  // GET the invitation and return real Scene[] in the existing shape
+  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  if (!invRes.ok) {
+    throw new Error(`Failed to fetch invitation: ${invRes.status} ${invRes.statusText}`);
+  }
+
+  const invData = await invRes.json();
+  const scenes: Scene[] = (invData.scenes || []).map((sc: any) => ({
+    ...sc,
+    imageUrl: resolveMediaUrl(sc.imageUrl),
+    videoUrl: sc.videoUrl ? resolveMediaUrl(sc.videoUrl) : undefined,
+    invitation_id: invitationId,
+  }));
 
   return scenes;
 }
 
-function buildDefaultAnimationPlan(sceneTitle: string, theme: string): AnimationPlan {
-  const movementOptions: CameraMovement[] = ['Slow zoom in', 'Parallax', 'Pan left/right', 'Static'];
-  const cameraMovement = movementOptions[sceneTitle.length % movementOptions.length];
-
-  return {
-    objectsDetected: [
-      `${theme} framing border`,
-      'Botanical floral clusters',
-      'Clean central stationery canvas',
-      'Ambient warm highlights',
-    ],
-    keepStationary: ['Center typography backdrop', 'Primary architectural columns'],
-    shouldMove: ['Outer foliage & petals in soft breeze', 'Ambient light shimmer'],
-    cameraMovement,
-    grokPrompt: `9:16 portrait motion for "${sceneTitle}": ${cameraMovement.toLowerCase()} with delicate organic sway along the ${theme.toLowerCase()} floral borders while keeping the central typography region crisp and steady.`,
-    videoStatus: 'idle',
-    videoProgress: 0,
-  };
-}
-
 /**
  * 2. generateImages
- * Simulates generating 9:16 background imagery either sequentially (story-driven) or in parallel.
+ * Calls POST /api/generate-images, then polls /status every 2-3 seconds
+ * and calls onSceneProgress per scene as each image finishes (generating -> done/failed, with image URL).
+ * Passes storyDriven through.
  */
 export async function generateImages(
   scenes: Scene[],
   storyDriven: boolean,
   onSceneProgress: (sceneId: string, status: Scene['imageStatus'], imageUrl?: string) => void
 ): Promise<Scene[]> {
-  const updated = [...scenes];
-
-  if (storyDriven) {
-    for (let i = 0; i < updated.length; i++) {
-      const sc = updated[i];
-      onSceneProgress(sc.id, 'generating');
-      await delay(580);
-      updated[i] = { ...sc, imageStatus: 'done' };
-      onSceneProgress(sc.id, 'done', sc.imageUrl);
-    }
-  } else {
-    updated.forEach((sc) => onSceneProgress(sc.id, 'generating'));
-    await Promise.all(
-      updated.map(async (sc, idx) => {
-        await delay(500 + idx * 240);
-        updated[idx] = { ...sc, imageStatus: 'done' };
-        onSceneProgress(sc.id, 'done', sc.imageUrl);
-      })
-    );
+  const { invitationId } = extractInvitationId(scenes[0]);
+  if (!invitationId) {
+    throw new Error('No invitation ID found for generateImages');
   }
 
-  return updated;
+  const res = await fetch(`${API_URL}/api/generate-images`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      invitation_id: invitationId,
+      story_driven: storyDriven,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to start image generation: ${res.statusText}`);
+  }
+
+  // Mark all scenes as generating initially
+  scenes.forEach((sc) => onSceneProgress(sc.id, 'generating'));
+
+  const sceneStatusMap = new Map<string, Scene['imageStatus']>();
+  scenes.forEach((sc) => sceneStatusMap.set(sc.id, 'generating'));
+
+  let allCompleted = false;
+  const pollInterval = 2500; // 2.5 seconds
+  const maxAttempts = 120;
+  let attempts = 0;
+
+  while (!allCompleted && attempts < maxAttempts) {
+    await delay(pollInterval);
+    attempts++;
+
+    try {
+      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+      if (!statusRes.ok) continue;
+
+      const statusData: {
+        invitation_id: string;
+        status: string;
+        scenes: Array<{
+          id: string;
+          scene_index: number;
+          order: number;
+          title: string;
+          image_status: 'pending' | 'generating' | 'done' | 'failed';
+          video_status: string;
+          video_progress: number;
+          image_url: string | null;
+          video_url: string | null;
+        }>;
+      } = await statusRes.json();
+
+      const backendScenes = statusData.scenes || [];
+      let doneOrFailedCount = 0;
+
+      for (const bs of backendScenes) {
+        const scId = bs.id;
+        const currentStatus = bs.image_status;
+        const prevStatus = sceneStatusMap.get(scId);
+
+        const resolvedImg = bs.image_url ? resolveMediaUrl(bs.image_url) : undefined;
+
+        if (currentStatus !== prevStatus) {
+          sceneStatusMap.set(scId, currentStatus);
+          onSceneProgress(scId, currentStatus, resolvedImg);
+        }
+
+        if (currentStatus === 'done' || currentStatus === 'failed') {
+          doneOrFailedCount++;
+        }
+      }
+
+      if (
+        (backendScenes.length > 0 && doneOrFailedCount === backendScenes.length) ||
+        statusData.status === 'done' ||
+        statusData.status === 'failed'
+      ) {
+        allCompleted = true;
+      }
+    } catch (err) {
+      console.error('Error polling image generation status:', err);
+    }
+  }
+
+  // Fetch complete final scenes from GET /api/invitations/{id}
+  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  if (invRes.ok) {
+    const invData = await invRes.json();
+    return (invData.scenes || []).map((sc: any) => ({
+      ...sc,
+      imageUrl: resolveMediaUrl(sc.imageUrl),
+      videoUrl: sc.videoUrl ? resolveMediaUrl(sc.videoUrl) : undefined,
+      invitation_id: invitationId,
+    }));
+  }
+
+  return scenes.map((sc) => ({
+    ...sc,
+    imageStatus: sceneStatusMap.get(sc.id) || sc.imageStatus,
+    invitation_id: invitationId,
+  }));
 }
 
 /**
  * 3. regenerateImage
- * Regenerates a single scene's background artwork based on its prompt (preserving the separate TextLayer).
+ * Calls POST /api/regenerate-image and polls /status until done or failed.
  */
 export async function regenerateImage(scene: Scene, customPrompt?: string): Promise<Scene> {
-  await delay(950);
-  const currentIdx = GENERATED_SCENE_IMAGES.indexOf(scene.imageUrl);
-  const nextImage = GENERATED_SCENE_IMAGES[(currentIdx + 1) % GENERATED_SCENE_IMAGES.length];
+  const { invitationId, sceneIndex } = extractInvitationId(scene);
+  const res = await fetch(`${API_URL}/api/regenerate-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      invitation_id: invitationId,
+      scene_index: sceneIndex,
+      custom_prompt: customPrompt,
+    }),
+  });
 
+  if (!res.ok) {
+    throw new Error(`Failed to regenerate image: ${res.statusText}`);
+  }
+
+  // Poll until done or failed
+  while (true) {
+    await delay(2000);
+    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+    if (statusRes.ok) {
+      const data = await statusRes.json();
+      const scStatus = data.scenes?.find((s: any) => s.scene_index === sceneIndex || s.id === scene.id);
+      if (scStatus) {
+        if (scStatus.image_status === 'done') {
+          const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+          if (invRes.ok) {
+            const invData = await invRes.json();
+            const updatedScene = invData.scenes?.find((s: any) => s.id === scene.id || s.order === scene.order);
+            if (updatedScene) {
+              return {
+                ...updatedScene,
+                imageUrl: resolveMediaUrl(updatedScene.imageUrl),
+                videoUrl: updatedScene.videoUrl ? resolveMediaUrl(updatedScene.videoUrl) : undefined,
+                invitation_id: invitationId,
+              };
+            }
+          }
+          return {
+            ...scene,
+            imageUrl: resolveMediaUrl(scStatus.image_url),
+            imageStatus: 'done',
+          };
+        } else if (scStatus.image_status === 'failed') {
+          throw new Error('Scene image regeneration failed');
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Helper to patch a scene's text layer, prompt or animation note
+ */
+export async function patchScene(
+  scene: Scene,
+  patch: {
+    text_layer?: any;
+    image_prompt?: string;
+    video_prompt?: string;
+    animation_note?: string;
+  }
+): Promise<Scene> {
+  const { invitationId, sceneIndex } = extractInvitationId(scene);
+  const res = await fetch(`${API_URL}/api/invitations/${invitationId}/scenes/${sceneIndex}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to patch scene: ${res.statusText}`);
+  }
+  const data = await res.json();
   return {
-    ...scene,
-    imageUrl: nextImage,
-    imagePrompt: customPrompt ?? scene.imagePrompt,
-    imageStatus: 'done',
-    textLayer: {
-      ...scene.textLayer,
-      color: getSceneTextColor(nextImage, scene.textLayer.color),
-    },
+    ...data.scene,
+    imageUrl: resolveMediaUrl(data.scene.imageUrl),
+    videoUrl: data.scene.videoUrl ? resolveMediaUrl(data.scene.videoUrl) : undefined,
+    invitation_id: invitationId,
   };
 }
 
