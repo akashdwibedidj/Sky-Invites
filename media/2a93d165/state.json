@@ -1,0 +1,95 @@
+{
+  "invitation_id": "2a93d165",
+  "input": {
+    "invitation_type": "wedding",
+    "bride_name": "Priya Sharma",
+    "groom_name": "Arjun Mehta",
+    "events": [
+      {
+        "name": "Mehendi",
+        "date": "2027-02-14",
+        "time": "5:00 PM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      },
+      {
+        "name": "Sangam",
+        "date": "2027-02-15",
+        "time": "7:00 PM",
+        "venue": "ITC Kohenur, Hyderabad"
+      },
+      {
+        "name": "Wedding",
+        "date": "2027-02-16",
+        "time": "11:00 AM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      }
+    ],
+    "style_description": "Royal Nizam-era grandeur with lush florals, golden arches, candlelight, and deep jewel tones — think Mughal opulence meets modern luxury.",
+    "num_scenes": 2,
+    "transition_type": "fade",
+    "theme": "Royal Mughal",
+    "style": "Cinematic Luxury",
+    "story_mode": false
+  },
+  "style_bible": {
+    "theme_location": "Royal Nizam-era Hyderabad, centered on the candlelit courtyards and carved stone arches of Taj Falaknuma Palace, with refined Mughal detailing and contemporary luxury-hotel polish.",
+    "colour_palette": [
+      {
+        "name": "Pearl Ivory",
+        "hex": "#F3EBDD"
+      },
+      {
+        "name": "Deep Mughal Emerald",
+        "hex": "#123D32"
+      },
+      {
+        "name": "Ruby Silk",
+        "hex": "#8A2438"
+      },
+      {
+        "name": "Warm Burnished Gold",
+        "hex": "#C9A84C"
+      },
+      {
+        "name": "Midnight Peacock Teal",
+        "hex": "#12313A"
+      }
+    ],
+    "recurring_motifs": [
+      "Slim warm-burnished-gold Mughal arch frames with fine scalloped tracery",
+      "Low, steady candle flames reflected in polished dark stone",
+      "Lush emerald foliage and restrained ruby-red floral clusters",
+      "A few slow-drifting ivory rose petals",
+      "Sheer pearl-ivory fabric softly framing the edges of the image"
+    ],
+    "lighting_mood": "Warm, intimate candlelight balanced by soft pearl-ivory ambient fill; let burnished-gold details catch gentle highlights while emerald and teal shadows stay rich and legible. Keep skin tones natural, highlights diffuse, and the overall image regal rather than glittering.",
+    "composition_rules": "Use symmetrical, stately framing inspired by palace archways. Keep people, ceremonial objects, and floral arrangements in the central lower third; reserve the upper 55% as uncluttered dark teal, deep emerald, or softly lit ivory negative space for invitation text. Maintain clear margins around all text, keep decorative arches near the frame edges, and avoid placing bright candles or flowers behind lettering.",
+    "motion_style": "Use an almost imperceptible 2–3% slow push-in or shallow parallax over each shot, with no handheld shake or whip movement. Let sheer fabric and rose petals drift at no more than 0.3× real speed; candle flames flicker subtly, and foliage remains nearly still. Transition between scenes with a clean, gradual fade."
+  },
+  "scenes": [
+    {
+      "scene_index": 0,
+      "scene_purpose": "Set a regal, romantic mood with candlelight, jewel tones, and Mughal-inspired grandeur.",
+      "text_data": {
+        "headline": "A royal beginning",
+        "sublines": [],
+        "note": ""
+      },
+      "image_prompt": "A regal, intimate view into the candlelit courtyard of Taj Falaknuma Palace, framed symmetrically by carved Mughal stone arches and slim burnished-gold scalloped tracery kept near the side edges. In the central lower third, polished midnight-teal stone reflects a few low, steady candle flames; lush emerald foliage and restrained ruby-red flowers gather beside the candles. Pearl-ivory sheer fabric softly frames the image edges, with a few ivory rose petals floating gently through the scene. Warm candlelight and soft ivory ambient fill reveal refined stonework without glitter, preserving rich emerald and teal shadows. No people, signage, or ornamental details in the open upper field. Portrait 9:16. No text, no letters, no numbers, no writing anywhere. Upper 55% is uncluttered, low-contrast deep teal with a soft pearl-ivory haze, clear space for text overlay."
+    },
+    {
+      "scene_index": 1,
+      "scene_purpose": "Close warmly with the couple’s celebration details and an inviting call to join them.",
+      "text_data": {
+        "headline": "Priya Sharma & Arjun Mehta",
+        "sublines": [
+          "Mehendi · Feb 14, 5:00 PM · Taj Falaknuma Palace, Hyderabad",
+          "Sangam · Feb 15, 7:00 PM · ITC Kohenur, Hyderabad",
+          "Wedding · Feb 16, 11:00 AM · Taj Falaknuma Palace, Hyderabad"
+        ],
+        "note": "Join us · Kindly RSVP"
+      },
+      "image_prompt": "A warm closing tableau in the candlelit courtyard of Taj Falaknuma Palace, framed symmetrically by slim burnished-gold Mughal arches with fine scalloped tracery at the edges. In the central lower third, an elegant celebration arrangement rests on polished dark stone: a refined silver mehendi tray, pearl-ivory bangles, restrained ruby-red flowers, lush emerald leaves, and a few drifting ivory rose petals. Low steady candles cast soft reflections; sheer pearl-ivory fabric gently frames the sides. Rich emerald and midnight-teal shadows balance warm candlelight and soft ivory fill, regal and intimate, never glittering. Keep all detail below the open upper area; cinematic luxury-hotel polish, still and graceful. Portrait 9:16. No text, no letters, no numbers, no writing anywhere. Upper 55% is an uncluttered, softly graded midnight-peacock-teal haze with gentle low-contrast candlelit falloff, clear for text overlay."
+    }
+  ]
+}

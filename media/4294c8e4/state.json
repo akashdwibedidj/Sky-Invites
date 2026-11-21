@@ -1,0 +1,164 @@
+{
+  "invitation_id": "4294c8e4",
+  "input": {
+    "invitation_type": "wedding",
+    "bride_name": "Priya Sharma",
+    "groom_name": "Arjun Mehta",
+    "events": [
+      {
+        "name": "Mehendi",
+        "date": "2027-02-14",
+        "time": "5:00 PM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      },
+      {
+        "name": "Sangam",
+        "date": "2027-02-15",
+        "time": "7:00 PM",
+        "venue": "ITC Kohenur, Hyderabad"
+      },
+      {
+        "name": "Wedding",
+        "date": "2027-02-16",
+        "time": "11:00 AM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      }
+    ],
+    "style_description": "Royal Nizam-era grandeur with lush florals, golden arches, candlelight, and deep jewel tones — think Mughal opulence meets modern luxury.",
+    "num_scenes": 2,
+    "transition_type": "fade",
+    "theme": "Royal Mughal",
+    "style": "Cinematic Luxury",
+    "story_mode": false
+  },
+  "style_bible": {
+    "theme_location": "Royal Nizam-era Hyderabad, evoking the candlelit halls, carved arches, and palace gardens of Taj Falaknuma Palace, with Mughal architectural detail balanced by restrained contemporary luxury.",
+    "colour_palette": [
+      {
+        "name": "Midnight Peacock Teal",
+        "hex": "#123B3A"
+      },
+      {
+        "name": "Warm Burnished Gold",
+        "hex": "#C9A84C"
+      },
+      {
+        "name": "Antique Ivory",
+        "hex": "#F2E8D5"
+      },
+      {
+        "name": "Ruby Pomegranate",
+        "hex": "#7A2038"
+      },
+      {
+        "name": "Garden Emerald",
+        "hex": "#24543B"
+      }
+    ],
+    "recurring_motifs": [
+      "Slim, Mughal-inspired burnished-gold arches with finely carved floral detailing",
+      "Lush arrangements of ruby roses, ivory jasmine, and deep green foliage",
+      "Small, steady candle flames reflected softly in polished stone and brass",
+      "Sheer antique-ivory drapery framing architectural openings"
+    ],
+    "lighting_mood": "Warm, intimate candlelight layered with soft amber architectural illumination; preserve deep teal and emerald shadows while keeping faces, florals, and invitation text clearly legible. Gold surfaces should glow softly rather than flare, with no harsh white highlights or modern colored lighting.",
+    "composition_rules": "Use balanced, symmetrical palace framing and keep the main arch or architectural focal point on the central vertical axis. Reserve the upper 45% as uncluttered, low-detail negative space for names and event text; place people, florals, and principal objects in the lower half or along the side margins. Keep text within the central 70% of the frame, away from candle flames and detailed ornament. Maintain a clear visual hierarchy: names first, event details second, decorative architecture third.",
+    "motion_style": "Use restrained, imperceptibly slow 2–3% camera push-ins or lateral parallax, with no handheld shake or abrupt reframing. Let sheer drapery and occasional petals drift gently at no more than 0.3× real-time speed; candle flames may flicker subtly. Transitions between scenes are soft fades, preserving the same warm exposure and unhurried pace."
+  },
+  "scenes": [
+    {
+      "scene_index": 0,
+      "scene_purpose": "Open on candlelit arches, lush florals, and jewel-toned grandeur to evoke a timeless royal romance.",
+      "text_data": {
+        "headline": "A Royal Celebration",
+        "sublines": [],
+        "note": ""
+      },
+      "image_prompt": "A symmetrical portrait view into a royal Nizam-era Hyderabad palace hall, evoking Taj Falaknuma: slim Mughal-inspired burnished-gold arches with delicate floral carving frame the sides, while the central axis glows softly in warm amber candlelight. Place lush ruby roses, ivory jasmine, and deep emerald foliage low in the frame, with a few steady candles reflected gently in polished stone and brass. Sheer antique-ivory drapery hangs at the margins; preserve rich midnight-teal shadows and restrained contemporary luxury, with no harsh highlights. Keep the upper region visually quiet and uncluttered, allowing the arches to fade into a gentle, low-contrast golden haze. Portrait 9:16. No text, no letters, no numbers, no writing anywhere. Upper 45% is a soft golden haze with low detail and low contrast, clear space for text overlay.",
+      "image_path": "media/4294c8e4/scene_0.png",
+      "text_blocks": [
+        {
+          "text": "A Royal Celebration",
+          "font": "Playfair Display",
+          "size": 5.4,
+          "colour": "#123B3A",
+          "alignment": "center",
+          "x": 15,
+          "y": 22,
+          "width": 70
+        }
+      ],
+      "video_prompt": "Hold the symmetrical palace composition: carved burnished-gold arches, central teal settee, polished marble reflections, and the open upper space remain steady and uncluttered. Keep the camera completely static and locked-off on a tripod with zero camera movement, no zoom, no push-in, no pan, and no tilt. Sheer ivory curtains breathe almost imperceptibly at the side edges; candle and chandelier flames flicker softly, their reflections wavering faintly across the floor. Ruby roses, ivory jasmine, and deep green leaves stay composed, with only a subtle natural leaf tremble. Preserve warm amber candlelight, rich teal shadows, and a calm, cinematic, luxurious mood. Portrait 9:16, completely static locked-off camera, no zoom, smooth motion, 5 seconds.",
+      "video_path": "media/4294c8e4/scene_0.mp4"
+    },
+    {
+      "scene_index": 1,
+      "scene_purpose": "Close with a warm invitation to celebrate the couple, presenting the wedding festivities as a heartfelt farewell.",
+      "text_data": {
+        "headline": "Priya Sharma & Arjun Mehta",
+        "sublines": [
+          "Mehendi · Feb 14, 2027 · 5:00 PM · Taj Falaknuma Palace, Hyderabad",
+          "Sangam · Feb 15, 2027 · 7:00 PM · ITC Kohenur, Hyderabad",
+          "Wedding · Feb 16, 2027 · 11:00 AM · Taj Falaknuma Palace, Hyderabad"
+        ],
+        "note": "Join us · Kindly RSVP"
+      },
+      "image_prompt": "A tender farewell in the candlelit palace gardens of royal Nizam-era Hyderabad: a slim Mughal-inspired burnished-gold arch frames the central axis, its fine floral carving kept to the side margins. In the lower half, Priya and Arjun stand close together, seen from behind in refined antique-ivory and deep-teal attire, beneath sheer ivory drapery. Ruby roses, ivory jasmine, and emerald foliage form restrained arrangements beside steady candles, their glow reflected softly in polished stone and brass. Warm amber illumination meets deep peacock-teal shadows; intimate, poised, heartfelt, and quietly luxurious, with balanced symmetry and no visual clutter above. Portrait 9:16. No text, no letters, no numbers, no writing anywhere. Upper 45% is a smooth, low-contrast teal-to-amber haze with gentle bokeh, clear and uncluttered for text overlay.",
+      "image_path": "media/4294c8e4/scene_1.png",
+      "text_blocks": [
+        {
+          "text": "Priya Sharma & Arjun Mehta",
+          "font": "Playfair Display",
+          "size": 4.8,
+          "colour": "#F2E8D5",
+          "alignment": "center",
+          "x": 8,
+          "y": 10.5,
+          "width": 84
+        },
+        {
+          "text": "Mehendi · Feb 14, 2027 · 5:00 PM · Taj Falaknuma Palace, Hyderabad",
+          "font": "EB Garamond",
+          "size": 1.35,
+          "colour": "#F2E8D5",
+          "alignment": "center",
+          "x": 5,
+          "y": 19.5,
+          "width": 90
+        },
+        {
+          "text": "Sangam · Feb 15, 2027 · 7:00 PM · ITC Kohenur, Hyderabad",
+          "font": "EB Garamond",
+          "size": 1.35,
+          "colour": "#F2E8D5",
+          "alignment": "center",
+          "x": 5,
+          "y": 23,
+          "width": 90
+        },
+        {
+          "text": "Wedding · Feb 16, 2027 · 11:00 AM · Taj Falaknuma Palace, Hyderabad",
+          "font": "EB Garamond",
+          "size": 1.35,
+          "colour": "#F2E8D5",
+          "alignment": "center",
+          "x": 5,
+          "y": 26.5,
+          "width": 90
+        },
+        {
+          "text": "Join us · Kindly RSVP",
+          "font": "Cormorant Garamond",
+          "size": 1.2,
+          "colour": "#F2E8D5",
+          "alignment": "center",
+          "x": 20,
+          "y": 31,
+          "width": 60
+        }
+      ],
+      "video_prompt": "A calm, cinematic luxury tableau beneath the carved burnished-gold Mughal arch: keep the embracing couple, palace silhouette, architecture, and composition perfectly still. The camera is completely static and locked-off on a tripod with no zoom, no push-in, no tilt, no shake, and no reframing. Sheer ivory curtains breathe almost imperceptibly at the sides; ruby rose petals and nearby foliage shift only faintly in a gentle breeze. Candle flames flicker softly, their warm reflections wavering delicately across the polished stone. Preserve the open midnight-teal sky, amber candlelight, and rich emerald shadows without flaring highlights. Portrait 9:16, completely static locked-off camera, no zoom, smooth motion, 5 seconds.",
+      "video_path": "media/4294c8e4/scene_1.mp4"
+    }
+  ]
+}

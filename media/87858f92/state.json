@@ -1,0 +1,36 @@
+{
+  "invitation_id": "87858f92",
+  "input": {
+    "invitation_type": "wedding",
+    "bride_name": "Priya Sharma",
+    "groom_name": "Arjun Mehta",
+    "events": [
+      {
+        "name": "Mehendi",
+        "date": "2027-02-14",
+        "time": "5:00 PM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      },
+      {
+        "name": "Sangam",
+        "date": "2027-02-15",
+        "time": "7:00 PM",
+        "venue": "ITC Kohenur, Hyderabad"
+      },
+      {
+        "name": "Wedding",
+        "date": "2027-02-16",
+        "time": "11:00 AM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      }
+    ],
+    "style_description": "Royal Nizam-era grandeur with lush florals, golden arches, candlelight, and deep jewel tones — think Mughal opulence meets modern luxury.",
+    "num_scenes": 4,
+    "transition_type": "fade",
+    "theme": "Royal Mughal",
+    "style": "Cinematic Luxury",
+    "story_mode": false
+  },
+  "style_bible": null,
+  "scenes": []
+}

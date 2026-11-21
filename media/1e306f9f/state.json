@@ -1,0 +1,94 @@
+{
+  "invitation_id": "1e306f9f",
+  "input": {
+    "invitation_type": "wedding",
+    "bride_name": "Priya Sharma",
+    "groom_name": "Arjun Mehta",
+    "events": [
+      {
+        "name": "Mehendi",
+        "date": "2027-02-14",
+        "time": "5:00 PM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      },
+      {
+        "name": "Sangam",
+        "date": "2027-02-15",
+        "time": "7:00 PM",
+        "venue": "ITC Kohenur, Hyderabad"
+      },
+      {
+        "name": "Wedding",
+        "date": "2027-02-16",
+        "time": "11:00 AM",
+        "venue": "Taj Falaknuma Palace, Hyderabad"
+      }
+    ],
+    "style_description": "Royal Nizam-era grandeur with lush florals, golden arches, candlelight, and deep jewel tones — think Mughal opulence meets modern luxury.",
+    "num_scenes": 2,
+    "transition_type": "fade",
+    "theme": "Royal Mughal",
+    "style": "Cinematic Luxury",
+    "story_mode": false
+  },
+  "style_bible": {
+    "theme_location": "A cinematic Royal Mughal wedding world inspired by Hyderabad’s Nizam-era palaces: carved marble halls, scalloped arches, and intimate candlelit courtyards, balancing historic grandeur with restrained modern luxury.",
+    "colour_palette": [
+      {
+        "name": "Midnight Peacock Teal",
+        "hex": "#123B3A"
+      },
+      {
+        "name": "Royal Pomegranate",
+        "hex": "#741F3A"
+      },
+      {
+        "name": "Warm Burnished Gold",
+        "hex": "#C9A84C"
+      },
+      {
+        "name": "Aged Ivory Marble",
+        "hex": "#F1E8D6"
+      },
+      {
+        "name": "Deep Mehendi Green",
+        "hex": "#40543A"
+      }
+    ],
+    "recurring_motifs": [
+      "Scalloped Mughal arches with fine warm-burnished-gold detailing",
+      "Small clusters of ivory jasmine and pomegranate-toned roses",
+      "Glowing ivory candles in antique brass holders",
+      "Sheer aged-ivory fabric drifting softly through palace interiors"
+    ],
+    "lighting_mood": "Romantic, low-contrast candlelight warmed by soft amber highlights; preserve rich teal, pomegranate, and mehendi tones without crushing shadows, and let gold details glow gently rather than sparkle. Keep skin tones natural and ivory marble softly luminous.",
+    "composition_rules": "Use a refined, symmetrical palace-inspired frame with the main architectural arch centred. Keep people, florals, and ceremonial details in the lower 45% of the frame; reserve the upper 55% as uncluttered, softly lit negative space for invitation text. Place decorative motifs near the edges, never behind names or event details, and maintain generous margins around all text.",
+    "motion_style": "Use imperceptibly slow, steady push-ins or shallow lateral parallax, with no abrupt pans or handheld shake. Let candle flames flicker subtly, sheer fabric drift at no more than 0.3× real speed, and loose petals descend sparsely and slowly. Keep the camera movement consistent across scenes and use a gentle fade between them."
+  },
+  "scenes": [
+    {
+      "scene_index": 0,
+      "scene_purpose": "Set a romantic, regal mood with candlelit arches, jewel tones, and lush florals.",
+      "text_data": {
+        "headline": "A Royal Celebration Awaits",
+        "sublines": [],
+        "note": ""
+      },
+      "image_prompt": "A cinematic, symmetrical Nizam-era palace courtyard in Hyderabad, framed by a centred scalloped Mughal arch with restrained warm-burnished-gold carving along its outer edges. Aged ivory marble glows softly in romantic candlelight, balanced with midnight peacock teal shadows, deep mehendi green, and touches of royal pomegranate. Keep all detail in the lower 45%: intimate clusters of ivory jasmine and pomegranate roses, glowing ivory candles in antique brass holders, and sheer aged-ivory fabric drifting gently beside the arch. Refined, historic grandeur with modern restraint; soft amber highlights, rich but uncrushed shadows, no people, no visual clutter. Portrait 9:16. No text, no letters, no numbers, no writing anywhere. Upper 55% is a softly lit, low-contrast teal-and-ivory haze within the arch, clear and uncluttered for text overlay."
+    },
+    {
+      "scene_index": 1,
+      "scene_purpose": "Share the wedding celebration details and close with a warm invitation to join the couple.",
+      "text_data": {
+        "headline": "Priya Sharma & Arjun Mehta",
+        "sublines": [
+          "Mehendi · Feb 14, 2027, 5:00 PM · Taj Falaknuma Palace, Hyderabad",
+          "Sangam · Feb 15, 2027, 7:00 PM · ITC Kohenur, Hyderabad",
+          "Wedding · Feb 16, 2027, 11:00 AM · Taj Falaknuma Palace, Hyderabad"
+        ],
+        "note": "Join us to celebrate · Kindly RSVP"
+      },
+      "image_prompt": "A cinematic, refined and symmetrical Nizam-era palace courtyard in Hyderabad, with a centred scalloped Mughal arch, fine warm-burnished-gold detailing, softly luminous aged-ivory marble, and restrained modern luxury. Keep the upper architecture softly lit and uncluttered; place all celebratory details in the lower 45%: a few glowing ivory candles in antique brass holders, small clusters of ivory jasmine and pomegranate-toned roses, and sheer aged-ivory fabric drifting at the edges. Rich midnight peacock teal, royal pomegranate, and deep mehendi green remain velvety and visible, with gentle amber candlelight, natural tones, soft shadows, and gold that glows rather than sparkles. Intimate, warm, cinematic atmosphere; elegant generous margins, no people or busy details above. Portrait 9:16. No text, no letters, no numbers, no writing anywhere. Upper 55% is a softly lit, low-contrast aged-ivory and amber haze within the arch, clear uncluttered space for text overlay."
+    }
+  ]
+}
