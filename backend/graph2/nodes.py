@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from openai import OpenAI
+from langsmith.wrappers import wrap_openai
 
 from config import VISION_LLM_MODEL
 from prompts import ANALYZE_IMAGE, ANIMATION_NOTE_SECTION
@@ -17,7 +18,7 @@ from storage import video_path as vid_path
 import grok
 
 
-_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+_client = wrap_openai(OpenAI(api_key=os.environ["OPENAI_API_KEY"]))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -53,7 +53,7 @@ Rules:
 - colour_palette: exactly 5 colours, each with a descriptive name and a hex value.
 - recurring_motifs: 3 to 5 visual elements that recur across scenes to unify them (e.g., floating rose petals, sheer ivory curtains, ornate arch frames, flickering diyas).
 - composition_rules: concrete framing conventions (e.g., "subjects always centred in the lower third; the upper 55% is left as soft negative space for text overlay").
-- motion_style: how camera and in-scene elements move (e.g., "imperceptibly slow 2–3 s parallax push-in; fabric and petals drift at ≤0.3× real speed").
+- motion_style: completely static, locked-off camera with zero camera movement, zoom, pan, or tilt. The image framing must stay entirely fixed. Only environmental and in-scene elements move subtly (e.g., fabric and petals drift gently at ≤0.3× real speed).
 
 Return ONLY valid JSON (no markdown fences):
 {{
@@ -169,22 +169,25 @@ You are a cinematographer and motion director for a luxury {invitation_type} inv
 Analyze the portrait 9:16 image below and produce a precise image-to-video motion prompt
 for the Grok AI video model.
 
-The camera and motion MUST match the style bible:
+CRITICAL CAMERA RULE:
+The camera MUST be completely static and locked off on a tripod. Absolutely NO camera movement, NO zooming in or out, NO push-in, NO pull-out, NO panning, NO tilting, and NO reframing. The camera must never move; the framing of the image must remain exactly as shown. ONLY in-scene environmental elements may move.
+
+The motion MUST match the style bible:
 {style_bible_json}
 
 {animation_note_section}
 
 Internally reason through (do NOT output these):
 — What objects, materials, and environments are present?
-— What must stay completely still (architecture, furniture, text-overlay regions)?
+— What must stay completely still (the camera, frame boundary, architecture, furniture, text-overlay regions)?
 — What can move subtly (fabric, candle flames, flower petals, leaves, water, mist, smoke, clouds)?
-— What single camera movement fits the scene mood and the style bible's motion_style?
 
 Then write ONLY the final video prompt (80–120 words). It must:
-- Name the specific movable elements and describe their gentle motion (no generic "elements move").
-- Specify the exact camera movement (e.g., "imperceptibly slow push-in toward the arch").
+- Explicitly state a completely static locked-off camera with zero camera movement or zoom.
+- Name the specific movable elements and describe their gentle, subtle motion (no generic "elements move").
+- Specify that the framing remains fixed.
 - Reinforce the mood: calm, cinematic, luxurious.
-- End with this exact sentence: "Portrait 9:16, smooth motion, 5 seconds."
+- End with this exact sentence: "Portrait 9:16, completely static locked-off camera, no zoom, smooth motion, 5 seconds."
 
 Output ONLY the prompt text. No explanations.
 """.strip()

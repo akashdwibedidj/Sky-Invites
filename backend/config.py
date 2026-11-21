@@ -18,8 +18,8 @@ IMAGE_QUALITY = "medium"            # "low" | "medium" | "high"
 
 # ── Video generation ──────────────────────────────────────────────────────────
 VIDEO_MODEL = "grok-imagine-video-1.5-lite"
-VIDEO_DURATION = 5                  # seconds  (1–15)
-VIDEO_RESOLUTION = "1080p"          # "480p" | "720p" | "1080p"
+VIDEO_DURATION = 2                  # seconds  (1–15)
+VIDEO_RESOLUTION = "480p"          # "480p" | "720p" | "1080p"
 
 # ── Typography ────────────────────────────────────────────────────────────────
 # layout_text must pick fonts ONLY from this list.

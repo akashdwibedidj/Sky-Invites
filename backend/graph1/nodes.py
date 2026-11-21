@@ -77,12 +77,10 @@ def _file_to_b64(path: Path) -> str:
 
 @traceable(name="generate_image", metadata={"model": IMAGE_MODEL})
 def _generate_one_image(prompt: str, out_path: Path, prev_b64: str | None = None) -> str:
-    """Returns the saved image path (str) so LangSmith logs the output, not base64 data."""
     """
     Generate a single portrait image and save it at out_path.
-    prev_b64: if set (story_mode), appends a visual-continuity instruction to the prompt.
-              Note: gpt-image-* generate endpoint is text-prompt-only; the reference is
-              embedded as a strongly-worded prompt instruction.
+    Returns the saved path (str) so LangSmith logs the path, not base64 data.
+    prev_b64: if set (story_mode), appends a visual-continuity instruction.
     """
     if prev_b64 is not None:
         prompt = (
@@ -97,9 +95,15 @@ def _generate_one_image(prompt: str, out_path: Path, prev_b64: str | None = None
         prompt=prompt,
         size=IMAGE_SIZE,
         quality=IMAGE_QUALITY,
-        response_format="b64_json",
     )
-    raw = base64.b64decode(resp.data[0].b64_json)
+    item = resp.data[0]
+    if getattr(item, "b64_json", None):
+        raw = base64.b64decode(item.b64_json)
+    elif getattr(item, "url", None):
+        import requests
+        raw = requests.get(item.url).content
+    else:
+        raise ValueError(f"Unexpected image response format: {item}")
     img = Image.open(BytesIO(raw))
     img_resized = img.resize(IMAGE_FINAL_SIZE, Image.Resampling.LANCZOS)
     out_path.parent.mkdir(parents=True, exist_ok=True)

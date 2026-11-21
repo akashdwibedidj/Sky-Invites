@@ -15,13 +15,11 @@ import os
 import sys
 import uuid
 from pathlib import Path
+from dotenv import load_dotenv
 
-# ── Load .env if python-dotenv is installed ───────────────────────────────────
-try:
-    from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent / ".env")
-except ImportError:
-    pass  # Set OPENAI_API_KEY and XAI_API_KEY manually in your environment
+# Load .env before importing graph modules
+ENV_PATH = Path(__file__).resolve().parent / ".env"
+load_dotenv(ENV_PATH, override=True)
 
 # ── Make backend/ importable ──────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parent))

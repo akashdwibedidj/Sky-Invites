@@ -20,7 +20,7 @@ from pathlib import Path
 # ── Load .env if python-dotenv is installed ───────────────────────────────────
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent / ".env")
+    load_dotenv(Path(__file__).parent / ".env", override=True)
 except ImportError:
     pass  # Set OPENAI_API_KEY and XAI_API_KEY manually in your environment
 
