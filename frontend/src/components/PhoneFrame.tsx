@@ -317,7 +317,16 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
         {...motionProps}
         className="absolute inset-0 w-full h-full"
       >
-        {!imgError && scene.imageUrl ? (
+        {animateMotion && scene.videoUrl ? (
+          <video
+            src={scene.videoUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+          />
+        ) : !imgError && scene.imageUrl ? (
           <img
             src={scene.imageUrl}
             alt={scene.title}

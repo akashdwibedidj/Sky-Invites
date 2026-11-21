@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
 import { GOOGLE_FONT_OPTIONS } from '../data/mockInvitations';
-import { editImageWithInstruction, regenerateImage } from '../services/api';
+import { editImageWithInstruction, patchScene, regenerateImage } from '../services/api';
 import { TextAlignment, TextLine, TextPlacement } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
 
@@ -85,6 +85,14 @@ export const ImageReviewScreen: React.FC = () => {
     }
   };
 
+  const updateAndPatchTextLayer = (updater: (l: TextLayer) => TextLayer) => {
+    updateSceneTextLayer(activeScene.id, (layer) => {
+      const next = updater(layer);
+      patchScene(activeScene, { text_layer: next }).catch(console.error);
+      return next;
+    });
+  };
+
   const handleUpdateLine = (lineId: string, text: string) => {
     updateSceneTextLayer(activeScene.id, (layer) => ({
       ...layer,
@@ -98,14 +106,14 @@ export const ImageReviewScreen: React.FC = () => {
       role: 'detail',
       text: 'New detail line',
     };
-    updateSceneTextLayer(activeScene.id, (layer) => ({
+    updateAndPatchTextLayer((layer) => ({
       ...layer,
       lines: [...layer.lines, newLine],
     }));
   };
 
   const handleDeleteLine = (lineId: string) => {
-    updateSceneTextLayer(activeScene.id, (layer) => ({
+    updateAndPatchTextLayer((layer) => ({
       ...layer,
       lines: layer.lines.filter((l) => l.id !== lineId),
     }));
@@ -290,6 +298,7 @@ export const ImageReviewScreen: React.FC = () => {
                     type="text"
                     value={line.text}
                     onChange={(e) => handleUpdateLine(line.id, e.target.value)}
+                    onBlur={() => patchScene(activeScene, { text_layer: activeScene.textLayer }).catch(console.error)}
                     className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
                   />
                   {activeScene.textLayer.lines.length > 1 && (
@@ -492,6 +501,9 @@ export const ImageReviewScreen: React.FC = () => {
                     ...sc,
                     imagePrompt: e.target.value,
                   }))
+                }
+                onBlur={(e) =>
+                  patchScene(activeScene, { image_prompt: e.target.value }).catch(console.error)
                 }
                 className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-[#FAF9F6] text-stone-800 focus:outline-none focus:border-[#B88B58]"
               />

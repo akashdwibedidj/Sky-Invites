@@ -139,7 +139,7 @@ export interface AnimationPlan {
   shouldMove: string[];
   cameraMovement: CameraMovement;
   grokPrompt: string;
-  videoStatus: 'idle' | 'queued' | 'generating' | 'done';
+  videoStatus: 'idle' | 'queued' | 'generating' | 'done' | 'failed';
   videoProgress: number;
 }
 
@@ -157,6 +157,7 @@ export interface Scene {
   textLayer: TextLayer;
   animationPlan: AnimationPlan;
   videoUrl?: string | null;
+  animationNote?: string;
 }
 
 export interface Invitation {

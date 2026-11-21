@@ -7,12 +7,13 @@ import {
   Film,
   Loader2,
   Play,
+  RotateCcw,
   Sparkles,
   Video,
 } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
-import { analyzeImage, generateVideo } from '../services/api';
-import { CameraMovement } from '../types/invitation';
+import { analyzeImage, generateVideo, patchScene } from '../services/api';
+import { CameraMovement, Scene } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
 
 const CAMERA_MOVEMENTS: CameraMovement[] = [
@@ -25,6 +26,7 @@ const CAMERA_MOVEMENTS: CameraMovement[] = [
 export const AnimationPromptScreen: React.FC = () => {
   const {
     activeInvitation,
+    updateScene,
     updateSceneAnimationPlan,
     updateActiveStatus,
     navigateTo,
@@ -56,10 +58,29 @@ export const AnimationPromptScreen: React.FC = () => {
     if (!target) return;
     setAnalyzingSceneId(sceneId);
     try {
-      const plan = await analyzeImage(target);
+      const plan = await analyzeImage(target, target.animationNote);
       updateSceneAnimationPlan(sceneId, () => plan);
     } finally {
       setAnalyzingSceneId(null);
+    }
+  };
+
+  const handleGenerateOneVideo = async (sc: Scene) => {
+    try {
+      const updated = await generateVideo(sc, (sceneId, status, progress) => {
+        updateSceneAnimationPlan(sceneId, (prev) => ({
+          ...prev,
+          videoStatus: status,
+          videoProgress: progress,
+        }));
+      });
+      updateScene(sc.id, () => updated);
+    } catch (err) {
+      updateSceneAnimationPlan(sc.id, (prev) => ({
+        ...prev,
+        videoStatus: 'failed',
+        videoProgress: 0,
+      }));
     }
   };
 
@@ -67,18 +88,11 @@ export const AnimationPromptScreen: React.FC = () => {
     setIsGeneratingVideos(true);
     updateActiveStatus('Generating');
     try {
-      await Promise.all(
-        scenes.map((sc) =>
-          generateVideo(sc, (sceneId, status, progress) => {
-            updateSceneAnimationPlan(sceneId, (prev) => ({
-              ...prev,
-              videoStatus: status,
-              videoProgress: progress,
-            }));
-          })
-        )
-      );
-      updateActiveStatus('Ready');
+      await Promise.all(scenes.map((sc) => handleGenerateOneVideo(sc)));
+      const freshDone = activeInvitation.scenes.every((s) => s.animationPlan.videoStatus === 'done');
+      if (freshDone) {
+        updateActiveStatus('Ready');
+      }
     } finally {
       setIsGeneratingVideos(false);
     }
@@ -162,23 +176,38 @@ export const AnimationPromptScreen: React.FC = () => {
                     <span className="font-semibold text-stone-900 truncate">
                       {sc.order}. {sc.title}
                     </span>
-                    <span
-                      className={`text-[11px] font-medium capitalize shrink-0 ${
-                        st === 'done'
-                          ? 'text-emerald-700'
-                          : st === 'generating'
-                            ? 'text-[#9A6F3D]'
-                            : 'text-stone-400'
-                      }`}
-                    >
-                      {st}
-                    </span>
+                    {st === 'failed' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateOneVideo(sc)}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-rose-100"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        <span>Retry</span>
+                      </button>
+                    ) : (
+                      <span
+                        className={`text-[11px] font-medium capitalize shrink-0 ${
+                          st === 'done'
+                            ? 'text-emerald-700'
+                            : st === 'generating'
+                              ? 'text-[#9A6F3D]'
+                              : 'text-stone-400'
+                        }`}
+                      >
+                        {st}
+                      </span>
+                    )}
                   </div>
                   <div className="h-1.5 w-full rounded-full bg-stone-100 overflow-hidden">
                     <div
                       style={{ width: `${sc.animationPlan.videoProgress}%` }}
                       className={`h-full transition-all duration-300 ${
-                        st === 'done' ? 'bg-emerald-600' : 'bg-[#B88B58]'
+                        st === 'done'
+                          ? 'bg-emerald-600'
+                          : st === 'failed'
+                            ? 'bg-rose-500'
+                            : 'bg-[#B88B58]'
                       }`}
                     />
                   </div>
@@ -303,6 +332,25 @@ export const AnimationPromptScreen: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Optional Animation Note */}
+                <div className="pt-2">
+                  <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                    Animation Note (Optional direction for AI analysis)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Focus motion on floating petals and candle shimmer"
+                    value={sc.animationNote || ''}
+                    onChange={(e) =>
+                      updateScene(sc.id, (s) => ({ ...s, animationNote: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      patchScene(sc, { animation_note: e.target.value }).catch(console.error)
+                    }
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                  />
+                </div>
+
                 {/* Camera Movement & Grok Prompt */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 pt-2">
                   <div className="sm:col-span-4">
@@ -340,10 +388,27 @@ export const AnimationPromptScreen: React.FC = () => {
                           grokPrompt: e.target.value,
                         }))
                       }
+                      onBlur={(e) =>
+                        patchScene(sc, { video_prompt: e.target.value }).catch(console.error)
+                      }
                       className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-stone-200 bg-[#FAF9F6] text-stone-800 focus:outline-none focus:border-[#B88B58]"
                     />
                   </div>
                 </div>
+
+                {plan.videoStatus === 'failed' && (
+                  <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 font-medium pt-1">
+                    <span>Video generation failed for this scene clip.</span>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateOneVideo(sc)}
+                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-rose-100 hover:bg-rose-200 text-rose-900 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Retry Video</span>
+                    </button>
+                  </div>
+                )}
 
                 {isVideoReady && (
                   <div className="flex items-center gap-2 text-xs text-emerald-700 font-medium pt-1">

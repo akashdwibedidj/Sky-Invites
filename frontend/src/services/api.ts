@@ -301,16 +301,19 @@ export async function generateImages(
 /**
  * 3. regenerateImage
  * Calls POST /api/regenerate-image and polls /status until done or failed.
+ * Keeps the existing text layer unless backend returns a new one.
  */
 export async function regenerateImage(scene: Scene, customPrompt?: string): Promise<Scene> {
   const { invitationId, sceneIndex } = extractInvitationId(scene);
+  const promptToUse = customPrompt ?? scene.imagePrompt;
+
   const res = await fetch(`${API_URL}/api/regenerate-image`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       invitation_id: invitationId,
       scene_index: sceneIndex,
-      custom_prompt: customPrompt,
+      custom_prompt: promptToUse,
     }),
   });
 
@@ -336,6 +339,8 @@ export async function regenerateImage(scene: Scene, customPrompt?: string): Prom
                 ...updatedScene,
                 imageUrl: resolveMediaUrl(updatedScene.imageUrl),
                 videoUrl: updatedScene.videoUrl ? resolveMediaUrl(updatedScene.videoUrl) : undefined,
+                textLayer: updatedScene.textLayer || scene.textLayer,
+                imagePrompt: promptToUse,
                 invitation_id: invitationId,
               };
             }
@@ -343,6 +348,7 @@ export async function regenerateImage(scene: Scene, customPrompt?: string): Prom
           return {
             ...scene,
             imageUrl: resolveMediaUrl(scStatus.image_url),
+            imagePrompt: promptToUse,
             imageStatus: 'done',
           };
         } else if (scStatus.image_status === 'failed') {
@@ -351,6 +357,191 @@ export async function regenerateImage(scene: Scene, customPrompt?: string): Prom
       }
     }
   }
+}
+
+/**
+ * 3b. editImageWithInstruction
+ * Calls POST /api/regenerate-image with instruction appended to current image prompt.
+ * Keeps existing text layer unless backend returns a new one. Polls until done.
+ */
+export async function editImageWithInstruction(scene: Scene, instruction: string): Promise<Scene> {
+  const { invitationId, sceneIndex } = extractInvitationId(scene);
+  const trimmed = instruction.trim();
+  const nextPrompt = trimmed ? `${scene.imagePrompt} Refined: ${trimmed}` : scene.imagePrompt;
+
+  const res = await fetch(`${API_URL}/api/regenerate-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      invitation_id: invitationId,
+      scene_index: sceneIndex,
+      custom_prompt: nextPrompt,
+      instruction: trimmed,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to edit image with instruction: ${res.statusText}`);
+  }
+
+  // Poll until done or failed
+  while (true) {
+    await delay(2000);
+    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+    if (statusRes.ok) {
+      const data = await statusRes.json();
+      const scStatus = data.scenes?.find((s: any) => s.scene_index === sceneIndex || s.id === scene.id);
+      if (scStatus) {
+        if (scStatus.image_status === 'done') {
+          const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+          if (invRes.ok) {
+            const invData = await invRes.json();
+            const updatedScene = invData.scenes?.find((s: any) => s.id === scene.id || s.order === scene.order);
+            if (updatedScene) {
+              return {
+                ...updatedScene,
+                imageUrl: resolveMediaUrl(updatedScene.imageUrl),
+                videoUrl: updatedScene.videoUrl ? resolveMediaUrl(updatedScene.videoUrl) : undefined,
+                textLayer: updatedScene.textLayer || scene.textLayer,
+                imagePrompt: nextPrompt,
+                invitation_id: invitationId,
+              };
+            }
+          }
+          return {
+            ...scene,
+            imageUrl: resolveMediaUrl(scStatus.image_url),
+            imagePrompt: nextPrompt,
+            imageStatus: 'done',
+          };
+        } else if (scStatus.image_status === 'failed') {
+          throw new Error('Image edit with instruction failed');
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 4. analyzeImage
+ * Calls POST /api/analyze-image (including animation note if available), returns the AnimationPlan.
+ */
+export async function analyzeImage(scene: Scene, animationNote?: string): Promise<AnimationPlan> {
+  const { invitationId, sceneIndex } = extractInvitationId(scene);
+  const note = animationNote ?? scene.animationNote;
+
+  const res = await fetch(`${API_URL}/api/analyze-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      invitation_id: invitationId,
+      scene_index: sceneIndex,
+      animation_note: note || undefined,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to analyze image: ${res.statusText}`);
+  }
+
+  const plan: AnimationPlan = await res.json();
+  return plan;
+}
+
+/**
+ * 5. generateVideo
+ * Calls POST /api/generate-video, polls /status, maps video_status to onProgress callback
+ * (queued, generating, done, failed) and uses backend progress value.
+ */
+export async function generateVideo(
+  scene: Scene,
+  onProgress: (sceneId: string, status: AnimationPlan['videoStatus'], progress: number) => void
+): Promise<Scene> {
+  const { invitationId, sceneIndex } = extractInvitationId(scene);
+  if (!invitationId) {
+    throw new Error('No invitation ID found for generateVideo');
+  }
+
+  onProgress(scene.id, 'queued', 10);
+
+  const res = await fetch(`${API_URL}/api/generate-video`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      invitation_id: invitationId,
+      scene_index: sceneIndex,
+    }),
+  });
+
+  if (!res.ok) {
+    onProgress(scene.id, 'failed', 0);
+    throw new Error(`Failed to start video generation: ${res.statusText}`);
+  }
+
+  let videoDone = false;
+  let videoFailed = false;
+  let lastProgress = 10;
+  const pollInterval = 2000;
+  const maxAttempts = 180;
+  let attempts = 0;
+
+  while (!videoDone && !videoFailed && attempts < maxAttempts) {
+    await delay(pollInterval);
+    attempts++;
+
+    try {
+      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+      if (!statusRes.ok) continue;
+
+      const statusData = await statusRes.json();
+      const scStatus = statusData.scenes?.find((s: any) => s.scene_index === sceneIndex || s.id === scene.id);
+
+      if (scStatus) {
+        const vStatus: AnimationPlan['videoStatus'] = scStatus.video_status || 'generating';
+        const vProgress: number = typeof scStatus.video_progress === 'number' ? scStatus.video_progress : lastProgress;
+        lastProgress = vProgress;
+
+        onProgress(scene.id, vStatus, vProgress);
+
+        if (vStatus === 'done') {
+          videoDone = true;
+        } else if (vStatus === 'failed') {
+          videoFailed = true;
+        }
+      }
+    } catch (err) {
+      console.error('Error polling video status:', err);
+    }
+  }
+
+  if (videoFailed) {
+    throw new Error(`Video generation failed for scene ${scene.id}`);
+  }
+
+  // Fetch updated invitation to get the real scene with videoUrl
+  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  if (invRes.ok) {
+    const invData = await invRes.json();
+    const updatedScene = invData.scenes?.find((s: any) => s.id === scene.id || s.order === scene.order);
+    if (updatedScene) {
+      return {
+        ...updatedScene,
+        imageUrl: resolveMediaUrl(updatedScene.imageUrl),
+        videoUrl: resolveMediaUrl(updatedScene.videoUrl),
+        invitation_id: invitationId,
+      };
+    }
+  }
+
+  return {
+    ...scene,
+    videoUrl: resolveMediaUrl(`/media/${invitationId}/scene_${sceneIndex}.mp4`),
+    animationPlan: {
+      ...scene.animationPlan,
+      videoStatus: 'done',
+      videoProgress: 100,
+    },
+  };
 }
 
 /**
@@ -380,128 +571,6 @@ export async function patchScene(
     imageUrl: resolveMediaUrl(data.scene.imageUrl),
     videoUrl: data.scene.videoUrl ? resolveMediaUrl(data.scene.videoUrl) : undefined,
     invitation_id: invitationId,
-  };
-}
-
-/**
- * 3b. editImageWithInstruction
- * Applies an AI image-editing instruction to the background layer only.
- */
-export async function editImageWithInstruction(scene: Scene, instruction: string): Promise<Scene> {
-  await delay(900);
-  const trimmed = instruction.trim();
-  const nextPrompt = trimmed ? `${scene.imagePrompt} Refined: ${trimmed}` : scene.imagePrompt;
-  const currentIdx = GENERATED_SCENE_IMAGES.indexOf(scene.imageUrl);
-  const nextImage =
-    trimmed.toLowerCase().includes('dark') || trimmed.toLowerCase().includes('night')
-      ? GENERATED_SCENE_IMAGES[2]
-      : trimmed.toLowerCase().includes('floral') || trimmed.toLowerCase().includes('flower')
-        ? GENERATED_SCENE_IMAGES[4]
-        : GENERATED_SCENE_IMAGES[(currentIdx + 2) % GENERATED_SCENE_IMAGES.length];
-
-  return {
-    ...scene,
-    imageUrl: nextImage,
-    imagePrompt: nextPrompt,
-    textLayer: {
-      ...scene.textLayer,
-      color: getSceneTextColor(nextImage, scene.textLayer.color),
-    },
-  };
-}
-
-/**
- * 4. analyzeImage
- * Simulates Vision-LLM analysis identifying foreground/background elements for Grok video prompting.
- */
-export async function analyzeImage(scene: Scene): Promise<AnimationPlan> {
-  await delay(750);
-
-  if (scene.imageUrl.includes('royal_mandap')) {
-    return {
-      objectsDetected: ['Carved sandstone arch', 'Blush roses', 'Jasmine garlands', 'Warm sunlit center'],
-      keepStationary: ['Sandstone arch frame', 'Center cream paper canvas'],
-      shouldMove: ['Hanging jasmine tendrils', 'Soft rose petal sway', 'Warm ambient light'],
-      cameraMovement: 'Slow zoom in',
-      grokPrompt:
-        'Slow zoom into the carved sandstone arch while a gentle breeze sways the blush roses and hanging jasmine vines; keep the central ivory canvas steady for text.',
-      videoStatus: 'idle',
-      videoProgress: 0,
-    };
-  }
-  if (scene.imageUrl.includes('haldi_floral')) {
-    return {
-      objectsDetected: ['Marigold vines', 'Brass urlis', 'Floating tealights', 'Stone courtyard'],
-      keepStationary: ['Courtyard stone pillars', 'Brass urli rims'],
-      shouldMove: ['Gentle water ripples', 'Candlelight flicker', 'Swaying marigold stems'],
-      cameraMovement: 'Parallax',
-      grokPrompt:
-        'Subtle morning courtyard parallax with shimmering water ripples inside the brass urlis and soft marigold garland motion.',
-      videoStatus: 'idle',
-      videoProgress: 0,
-    };
-  }
-  if (scene.imageUrl.includes('sangeet_starlit')) {
-    return {
-      objectsDetected: ['Rose-gold filigree arch', 'Fairy lights', 'Evening bokeh', 'Twilight gradient'],
-      keepStationary: ['Rose-gold arch perimeter'],
-      shouldMove: ['Upward drifting golden bokeh', 'Gentle fairy light twinkle'],
-      cameraMovement: 'Slow zoom in',
-      grokPrompt:
-        'Romantic twilight bokeh particles drifting softly upward inside the rose-gold Mughal arch with subtle warm shimmer.',
-      videoStatus: 'idle',
-      videoProgress: 0,
-    };
-  }
-  if (scene.imageUrl.includes('reception_ivory')) {
-    return {
-      objectsDetected: ['White orchids', 'Champagne silk ribbon', 'Gold foil flecks', 'Deckled pearl card'],
-      keepStationary: ['Pearl stationery card center'],
-      shouldMove: ['Silk ribbon edge ripple', 'Gold foil light sweep'],
-      cameraMovement: 'Static',
-      grokPrompt:
-        'Soft studio sunlight sweeping across the champagne silk ribbon and gold leaf flecks with delicate orchid petal movement.',
-      videoStatus: 'idle',
-      videoProgress: 0,
-    };
-  }
-
-  return {
-    objectsDetected: ['Blush peonies', 'Eucalyptus stems', 'Alabaster linen texture'],
-    keepStationary: ['Alabaster center linen canvas'],
-    shouldMove: ['Eucalyptus leaves swaying', 'Soft golden hour light'],
-    cameraMovement: 'Pan left/right',
-    grokPrompt:
-      'Gentle watercolor breeze moving the upper and lower botanical garlands while preserving a serene still center for typography.',
-    videoStatus: 'idle',
-    videoProgress: 0,
-  };
-}
-
-/**
- * 5. generateVideo
- * Simulates generating a looping 9:16 video clip for a scene via Grok video model.
- */
-export async function generateVideo(
-  scene: Scene,
-  onProgress: (sceneId: string, status: AnimationPlan['videoStatus'], progress: number) => void
-): Promise<Scene> {
-  onProgress(scene.id, 'queued', 10);
-  await delay(250);
-
-  const steps = [30, 55, 78, 95, 100];
-  for (const pct of steps) {
-    onProgress(scene.id, pct === 100 ? 'done' : 'generating', pct);
-    await delay(280);
-  }
-
-  return {
-    ...scene,
-    animationPlan: {
-      ...scene.animationPlan,
-      videoStatus: 'done',
-      videoProgress: 100,
-    },
   };
 }
 
