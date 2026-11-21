@@ -1,0 +1,6 @@
+{
+  "name": "Sky Invites",
+  "description": "AI-powered portrait wedding and event invitation video studio (1080x1920, 9:16).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

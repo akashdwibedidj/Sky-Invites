@@ -3,8 +3,9 @@ pillow
 pytest
 langgraph
 openai
-pillow
 xai-sdk
 requests
 python-dotenv
 langsmith
+sqlalchemy
+psycopg[binary]
