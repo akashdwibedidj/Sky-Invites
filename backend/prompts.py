@@ -120,21 +120,28 @@ Output ONLY the prompt text. No explanations.
 
 
 # ── Graph 1: Node 5 ───────────────────────────────────────────────────────────
-# layout_text: vision model positions text blocks over the scene image.
+# layout_text: vision model positions text layer over the scene image.
 
 LAYOUT_TEXT = """
 You are a typographic art director for a luxury {invitation_type} invitation video.
 
 You are given a portrait 9:16 scene image and the text that must appear on it.
-Position each piece of text precisely so that it:
+Determine the layout parameters for the whole text group over this image:
 
-1. Sits inside a 5% safe margin on all four sides (x ≥ 5, x+width ≤ 95, y ≥ 5, y ≤ 95).
-2. Falls entirely within the image's natural empty / negative-space region (avoid any busy or detailed area).
-3. Contrasts clearly with the background — use colours from the style bible's palette that are legible on this specific image.
-4. Respects visual hierarchy: headline is the largest, sublines are noticeably smaller, note is the smallest.
-5. Feels elegant and intentional — not crowded.
+1. placement: where the text group sits best in the image negative space ("top", "center", or "bottom").
+2. xOffset: fine horizontal adjustment in percentage (-35 to 35, usually 0).
+3. yOffset: fine vertical adjustment in percentage (-40 to 40, usually 0).
+4. color: hex code "#RRGGBB" contrasting clearly with the background in that region, chosen from the style bible's palette.
+5. alignment: text alignment ("left", "center", or "right").
+6. fontSize: base font size in pixels for 9:16 preview (typically 18 to 26, default 22).
+7. lines: an array of lines to display, ordered from top to bottom. Each line has:
+   - "id": a unique string ID like "l-1", "l-2"
+   - "role": one of "kicker", "heading", "subheading", "detail", "footer"
+   - "text": the exact text to display
 
-Allowed fonts (use ONLY these exact strings): {allowed_fonts}
+The user has chosen:
+- Heading font: {heading_font}
+- Body font: {body_font}
 
 Style Bible reference:
 {style_bible_json}
@@ -142,54 +149,59 @@ Style Bible reference:
 Text to place for this scene:
 {text_data_json}
 
-Return ONLY valid JSON as a list of text block objects (no markdown fences).
-Each object must have exactly these keys:
-
-[
-  {{
-    "text": "exact string to display",
-    "font": "one of the allowed fonts",
-    "size": <number — percentage of frame height, e.g. 5.0 means 5%>,
-    "colour": "#RRGGBB",
-    "alignment": "left" | "center" | "right",
-    "x": <left edge as % of frame width, 0–100>,
-    "y": <top edge as % of frame height, 0–100>,
-    "width": <block width as % of frame width, 5–90>
-  }}
-]
+Return ONLY valid JSON (no markdown fences) in exactly this format:
+{{
+  "lines": [
+    {{"id": "l-1", "role": "heading", "text": "..."}}
+  ],
+  "headingFont": "{heading_font}",
+  "bodyFont": "{body_font}",
+  "fontSize": 22,
+  "color": "#RRGGBB",
+  "alignment": "center",
+  "placement": "center",
+  "xOffset": 0,
+  "yOffset": 0,
+  "animation": "Slide-up",
+  "sequentialDelayMs": 250
+}}
 """.strip()
 
 
 # ── Graph 2: Node 1 ───────────────────────────────────────────────────────────
-# analyze_image: vision model writes the Grok video prompt.
+# analyze_image: vision model writes structured animation plan & Grok video prompt.
 
 ANALYZE_IMAGE = """
 You are a cinematographer and motion director for a luxury {invitation_type} invitation video.
 
-Analyze the portrait 9:16 image below and produce a precise image-to-video motion prompt
-for the Grok AI video model.
+Analyze the portrait 9:16 image below and produce a structured animation plan and a precise image-to-video motion prompt for the Grok AI video model.
 
-CRITICAL CAMERA RULE:
-The camera MUST be completely static and locked off on a tripod. Absolutely NO camera movement, NO zooming in or out, NO push-in, NO pull-out, NO panning, NO tilting, and NO reframing. The camera must never move; the framing of the image must remain exactly as shown. ONLY in-scene environmental elements may move.
+The camera movement MUST be chosen from one of these exact options:
+- "Slow zoom in"
+- "Parallax"
+- "Pan left/right"
+- "Static"
 
 The motion MUST match the style bible:
 {style_bible_json}
 
 {animation_note_section}
 
-Internally reason through (do NOT output these):
-— What objects, materials, and environments are present?
-— What must stay completely still (the camera, frame boundary, architecture, furniture, text-overlay regions)?
-— What can move subtly (fabric, candle flames, flower petals, leaves, water, mist, smoke, clouds)?
+Analyze the visual elements:
+- objectsDetected: list 3 to 5 key objects, materials, and environments present in the image.
+- keepStationary: list elements that must stay completely still (e.g., central text area, primary architectural structures, borders).
+- shouldMove: list in-scene elements that can move subtly (e.g., flower petals, foliage in breeze, water ripples, candle flicker, light shimmer).
+- cameraMovement: one of "Slow zoom in", "Parallax", "Pan left/right", "Static".
+- grokPrompt: a vivid 80–120 word prompt for Grok video generation describing the camera movement and delicate motion of the movable elements while preserving steady areas for typography. End with: "Portrait 9:16, smooth motion, 5 seconds."
 
-Then write ONLY the final video prompt (80–120 words). It must:
-- Explicitly state a completely static locked-off camera with zero camera movement or zoom.
-- Name the specific movable elements and describe their gentle, subtle motion (no generic "elements move").
-- Specify that the framing remains fixed.
-- Reinforce the mood: calm, cinematic, luxurious.
-- End with this exact sentence: "Portrait 9:16, completely static locked-off camera, no zoom, smooth motion, 5 seconds."
-
-Output ONLY the prompt text. No explanations.
+Return ONLY valid JSON (no markdown fences):
+{{
+  "objectsDetected": ["..."],
+  "keepStationary": ["..."],
+  "shouldMove": ["..."],
+  "cameraMovement": "Slow zoom in",
+  "grokPrompt": "..."
+}}
 """.strip()
 
 # Injected into ANALYZE_IMAGE when the user has provided an animation note.

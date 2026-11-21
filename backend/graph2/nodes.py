@@ -48,12 +48,8 @@ def _file_to_b64(path: Path) -> str:
 
 def analyze_image(state: dict) -> dict:
     """
-    Vision model inspects one scene image and writes the Grok video prompt.
+    Vision model inspects one scene image and writes structured animation plan & Grok prompt.
     Runs in parallel via LangGraph Send — one worker per scene.
-
-    Reads: state["_current_scene"]["image_path"]  (relative to project root)
-           state["_current_scene"]["animation_note"]  (optional — set by user in state.json)
-    Returns: {"_video_prompt_results": [{"scene_index": i, "video_prompt": "..."}]}
     """
     scene = state["_current_scene"]
     image_full_path = PROJECT_ROOT / scene["image_path"]
@@ -72,20 +68,49 @@ def analyze_image(state: dict) -> dict:
     )
 
     img_b64 = _file_to_b64(image_full_path)
-    video_prompt = _vision(prompt, img_b64)
+    raw = _vision(prompt, img_b64)
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1]).strip()
+    parsed = json.loads(text)
+
+    allowed_movements = {"Slow zoom in", "Parallax", "Pan left/right", "Static"}
+    cam_mov = parsed.get("cameraMovement")
+    if cam_mov not in allowed_movements:
+        cam_mov = "Static"
+
+    plan = {
+        "objectsDetected": parsed.get("objectsDetected", []),
+        "keepStationary": parsed.get("keepStationary", []),
+        "shouldMove": parsed.get("shouldMove", []),
+        "cameraMovement": cam_mov,
+        "grokPrompt": parsed.get("grokPrompt", ""),
+        "videoStatus": "idle",
+        "videoProgress": 0,
+    }
 
     return {
         "_video_prompt_results": [
-            {"scene_index": scene["scene_index"], "video_prompt": video_prompt}
+            {
+                "scene_index": scene["scene_index"],
+                "video_prompt": plan["grokPrompt"],
+                "animation_plan": plan,
+            }
         ],
     }
 
 
 def collect_video_prompts(state: dict) -> dict:
     """Merges parallel analyze_image results into scenes and saves state."""
+    plan_map = {r["scene_index"]: r["animation_plan"] for r in state["_video_prompt_results"]}
     prompt_map = {r["scene_index"]: r["video_prompt"] for r in state["_video_prompt_results"]}
     updated = [
-        {**scene, "video_prompt": prompt_map[scene["scene_index"]]}
+        {
+            **scene,
+            "video_prompt": prompt_map[scene["scene_index"]],
+            "animation_plan": plan_map[scene["scene_index"]],
+        }
         for scene in state["scenes"]
     ]
 
@@ -94,6 +119,61 @@ def collect_video_prompts(state: dict) -> dict:
     save_state(state["invitation_id"], st)
 
     return {"scenes": updated}
+
+
+def analyze_one_scene(invitation_id: str, scene_index: int, animation_note: str | None = None) -> dict:
+    """Analyze one scene image and return structured AnimationPlan dict."""
+    st = load_state(invitation_id)
+    scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
+    image_full_path = PROJECT_ROOT / scene["image_path"]
+
+    note = (animation_note if animation_note is not None else scene.get("animation_note", "")).strip()
+    note_section = (
+        ANIMATION_NOTE_SECTION.format(animation_note=note)
+        if note
+        else ""
+    )
+
+    prompt = ANALYZE_IMAGE.format(
+        invitation_type=st["input"].get("invitation_type", "wedding"),
+        style_bible_json=json.dumps(st["style_bible"], indent=2),
+        animation_note_section=note_section,
+    )
+
+    img_b64 = _file_to_b64(image_full_path)
+    raw = _vision(prompt, img_b64)
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1]).strip()
+    parsed = json.loads(text)
+
+    allowed_movements = {"Slow zoom in", "Parallax", "Pan left/right", "Static"}
+    cam_mov = parsed.get("cameraMovement")
+    if cam_mov not in allowed_movements:
+        cam_mov = "Static"
+
+    plan = {
+        "objectsDetected": parsed.get("objectsDetected", []),
+        "keepStationary": parsed.get("keepStationary", []),
+        "shouldMove": parsed.get("shouldMove", []),
+        "cameraMovement": cam_mov,
+        "grokPrompt": parsed.get("grokPrompt", ""),
+        "videoStatus": "idle",
+        "videoProgress": 0,
+    }
+
+    # Save to scene in DB
+    scene["animation_plan"] = plan
+    scene["video_prompt"] = plan["grokPrompt"]
+    if animation_note is not None:
+        scene["animation_note"] = animation_note
+    st["scenes"] = [
+        scene if s["scene_index"] == scene_index else s
+        for s in st["scenes"]
+    ]
+    save_state(invitation_id, st)
+    return plan
 
 
 # ── Node 2: generate_video_scene (parallel worker, called via Send) ───────────
@@ -140,3 +220,35 @@ def collect_videos(state: dict) -> dict:
     save_state(state["invitation_id"], st)
 
     return {"scenes": updated}
+
+
+def generate_video_for_scene(invitation_id: str, scene_index: int) -> str:
+    """Generate video for a single scene via Grok and save result."""
+    st = load_state(invitation_id)
+    scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
+
+    image_full_path = PROJECT_ROOT / scene["image_path"]
+    output_path = vid_path(invitation_id, scene_index)
+
+    if scene.get("animation_plan"):
+        scene["animation_plan"]["videoStatus"] = "generating"
+        save_state(invitation_id, st)
+
+    try:
+        grok.generate_video(
+            image_path=image_full_path,
+            video_prompt=scene["video_prompt"],
+            output_path=output_path,
+        )
+        relative_vid = rel(output_path)
+        scene["video_path"] = relative_vid
+        if scene.get("animation_plan"):
+            scene["animation_plan"]["videoStatus"] = "done"
+            scene["animation_plan"]["videoProgress"] = 100
+        save_state(invitation_id, st)
+        return relative_vid
+    except Exception as e:
+        if scene.get("animation_plan"):
+            scene["animation_plan"]["videoStatus"] = "failed"
+            save_state(invitation_id, st)
+        raise e

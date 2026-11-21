@@ -9,3 +9,5 @@ python-dotenv
 langsmith
 sqlalchemy
 psycopg[binary]
+fastapi
+uvicorn

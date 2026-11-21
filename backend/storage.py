@@ -83,10 +83,14 @@ def load_state(invitation_id: str) -> dict:
                 scene_dict["image_path"] = s.image_path
             if s.text_blocks is not None:
                 scene_dict["text_blocks"] = s.text_blocks
+            if s.text_layer is not None:
+                scene_dict["text_layer"] = s.text_layer
             if s.video_prompt is not None:
                 scene_dict["video_prompt"] = s.video_prompt
             if s.animation_note is not None:
                 scene_dict["animation_note"] = s.animation_note
+            if s.animation_plan is not None:
+                scene_dict["animation_plan"] = s.animation_plan
             if s.video_path is not None:
                 scene_dict["video_path"] = s.video_path
             if s.status is not None:
@@ -147,8 +151,10 @@ def save_state(invitation_id: str, state: dict) -> None:
                 "image_prompt",
                 "image_path",
                 "text_blocks",
+                "text_layer",
                 "video_prompt",
                 "animation_note",
+                "animation_plan",
                 "video_path",
                 "status",
             ):

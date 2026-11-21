@@ -235,32 +235,43 @@ def generate_images(state: dict) -> dict:
 # ── Node 5: layout_text_scene (parallel worker, called via Send) ──────────────
 
 def layout_text_scene(state: dict) -> dict:
-    """Runs the vision model to place text blocks on one scene image. Parallel via Send."""
+    """Runs the vision model to place the text layer on one scene image. Parallel via Send."""
     scene = state["_current_scene"]
     inv = state["input"]
     img_b64 = _file_to_b64(img_path(state["invitation_id"], scene["scene_index"]))
 
+    heading_font = inv.get("heading_font") or inv.get("headingFont") or "Playfair Display"
+    body_font = inv.get("body_font") or inv.get("bodyFont") or "Cormorant Garamond"
+
     prompt = LAYOUT_TEXT.format(
-        invitation_type=inv["invitation_type"],
-        allowed_fonts=", ".join(f'"{f}"' for f in ALLOWED_FONTS),
+        invitation_type=inv.get("invitation_type", "wedding"),
+        heading_font=heading_font,
+        body_font=body_font,
         style_bible_json=json.dumps(state["style_bible"], indent=2),
         text_data_json=json.dumps(scene["text_data"], indent=2),
     )
     raw = _vision(prompt, img_b64)
-    text_blocks = _parse_json(raw)
+    text_layer = _parse_json(raw)
+    if isinstance(text_layer, dict):
+        text_layer["headingFont"] = heading_font
+        text_layer["bodyFont"] = body_font
+        if "animation" not in text_layer:
+            text_layer["animation"] = inv.get("text_animation") or inv.get("textAnimation") or "Slide-up"
+        if "sequentialDelayMs" not in text_layer:
+            text_layer["sequentialDelayMs"] = 250
 
     return {
         "_layout_results": [
-            {"scene_index": scene["scene_index"], "text_blocks": text_blocks}
+            {"scene_index": scene["scene_index"], "text_layer": text_layer}
         ],
     }
 
 
 def collect_layout(state: dict) -> dict:
     """Merges all parallel layout results back into scenes and saves final state."""
-    layout_map = {r["scene_index"]: r["text_blocks"] for r in state["_layout_results"]}
+    layout_map = {r["scene_index"]: r.get("text_layer") for r in state["_layout_results"]}
     updated = [
-        {**scene, "text_blocks": layout_map[scene["scene_index"]]}
+        {**scene, "text_layer": layout_map.get(scene["scene_index"])}
         for scene in state["scenes"]
     ]
 

@@ -26,8 +26,11 @@ VIDEO_RESOLUTION = "480p"          # "480p" | "720p" | "1080p"
 ALLOWED_FONTS = [
     "Playfair Display",
     "Cormorant Garamond",
-    "Great Vibes",
-    "Montserrat",
-    "Lato",
-    "EB Garamond",
+    "Cinzel",
+    "Bodoni Moda",
+    "Fraunces",
+    "Lora",
+    "Plus Jakarta Sans",
+    "DM Sans",
+    "Inter",
 ]

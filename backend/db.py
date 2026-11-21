@@ -19,9 +19,9 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Load .env if present
 ENV_PATH = Path(__file__).resolve().parent / ".env"
-load_dotenv(ENV_PATH, override=False)
+load_dotenv(ENV_PATH, override=True)
 PROJECT_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(PROJECT_ENV_PATH, override=False)
+load_dotenv(PROJECT_ENV_PATH, override=True)
 
 Base = declarative_base()
 
@@ -48,8 +48,10 @@ class Scene(Base):
     image_prompt = Column(Text, nullable=True)
     image_path = Column(String(512), nullable=True)
     text_blocks = Column(JSONB, nullable=True)
+    text_layer = Column(JSONB, nullable=True)
     video_prompt = Column(Text, nullable=True)
     animation_note = Column(Text, nullable=True)
+    animation_plan = Column(JSONB, nullable=True)
     video_path = Column(String(512), nullable=True)
     status = Column(String(50), nullable=True, default="pending")
 
