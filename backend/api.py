@@ -7,6 +7,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -28,6 +29,7 @@ if str(BACKEND_DIR) not in sys.path:
 load_dotenv(BACKEND_DIR / ".env", override=True)
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
+from config import normalize_category
 from storage import (
     create_invitation,
     load_state,
@@ -43,6 +45,7 @@ from graph1.nodes import (
     build_prompt_scene,
     collect_prompts,
     layout_text_scene,
+    build_text_layer,
     regenerate_image as node_regenerate_image,
     _generate_one_image,
     _file_to_b64,
@@ -50,7 +53,10 @@ from graph1.nodes import (
 from graph2.nodes import (
     analyze_one_scene,
     generate_video_for_scene,
+    format_should_move_as_strings,
 )
+from app.render import render_project
+from app.render.adapter import frontend_to_project
 
 logger = logging.getLogger("sky_invites_api")
 logging.basicConfig(level=logging.INFO)
@@ -114,6 +120,13 @@ class PatchSceneRequest(BaseModel):
     animation_note: Optional[str] = None
 
 
+class ExportVideoRequest(BaseModel):
+    invitation_id: str
+    scenes: list[dict[str, Any]]
+    transition: Optional[str] = None
+    title: Optional[str] = None
+
+
 # ── Conversion Helpers ────────────────────────────────────────────────────────
 
 def frontend_to_backend_input(inv: dict[str, Any]) -> dict[str, Any]:
@@ -136,8 +149,10 @@ def frontend_to_backend_input(inv: dict[str, Any]) -> dict[str, Any]:
             "venue": ev.get("venue", ""),
         })
 
+    category = normalize_category(inv.get("type", "Wedding"))
+
     return {
-        "invitation_type": inv.get("type", "Wedding").lower(),
+        "invitation_type": category,
         "bride_name": details.get("brideName", ""),
         "groom_name": details.get("groomName", ""),
         "bride_parents": details.get("brideParents", ""),
@@ -161,40 +176,7 @@ def frontend_to_backend_input(inv: dict[str, Any]) -> dict[str, Any]:
 
 def build_default_text_layer(scene: dict[str, Any], inv_input: dict[str, Any]) -> dict[str, Any]:
     """Construct a clean default TextLayer from scene text_data and design typography."""
-    text_data = scene.get("text_data") or {}
-    idx = scene.get("scene_index", 0)
-
-    lines = []
-    headline = text_data.get("headline", "").strip()
-    if headline:
-        lines.append({"id": f"l-{idx}-1", "role": "heading", "text": headline})
-
-    sublines = text_data.get("sublines", [])
-    if isinstance(sublines, list):
-        for s_idx, sub in enumerate(sublines):
-            if sub and str(sub).strip():
-                lines.append({"id": f"l-{idx}-{s_idx + 2}", "role": "subheading", "text": str(sub).strip()})
-
-    note = text_data.get("note", "").strip() if isinstance(text_data.get("note"), str) else ""
-    if note:
-        lines.append({"id": f"l-{idx}-note", "role": "detail", "text": note})
-
-    if not lines:
-        lines = [{"id": f"l-{idx}-1", "role": "heading", "text": scene.get("scene_purpose", "Celebration")}]
-
-    return {
-        "lines": lines,
-        "headingFont": inv_input.get("heading_font", "Playfair Display"),
-        "bodyFont": inv_input.get("body_font", "Cormorant Garamond"),
-        "fontSize": 22,
-        "color": "#FAF6EE",
-        "alignment": "center",
-        "placement": "center",
-        "xOffset": 0,
-        "yOffset": 0,
-        "animation": inv_input.get("text_animation", "Slide-up"),
-        "sequentialDelayMs": 250,
-    }
+    return build_text_layer(scene, inv_input)
 
 
 def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_input: dict[str, Any]) -> dict[str, Any]:
@@ -219,9 +201,9 @@ def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_inp
     if not text_layer:
         text_layer = build_default_text_layer(scene, inv_input)
 
-    animation_plan = scene.get("animation_plan")
+    raw_animation_plan = scene.get("animation_plan")
     has_video = bool(scene.get("video_path"))
-    if not animation_plan:
+    if not raw_animation_plan:
         animation_plan = {
             "objectsDetected": [],
             "keepStationary": [],
@@ -231,9 +213,15 @@ def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_inp
             "videoStatus": "done" if has_video else "idle",
             "videoProgress": 100 if has_video else 0,
         }
-    elif has_video and animation_plan.get("videoStatus") != "done":
-        animation_plan["videoStatus"] = "done"
-        animation_plan["videoProgress"] = 100
+    else:
+        animation_plan = dict(raw_animation_plan)
+        # Ensure shouldMove is string[] for the frontend
+        animation_plan["shouldMove"] = format_should_move_as_strings(raw_animation_plan.get("shouldMove", []))
+        if has_video and animation_plan.get("videoStatus") != "done":
+            animation_plan["videoStatus"] = "done"
+            animation_plan["videoProgress"] = 100
+        elif not has_video and animation_plan.get("videoStatus") == "done":
+            animation_plan["videoProgress"] = 100
 
     return {
         "id": f"sc-{invitation_id}-{idx}",
@@ -436,6 +424,107 @@ def run_generate_video_task(invitation_id: str, scene_index: int) -> None:
         logger.error(f"[{invitation_id}] Scene {scene_index} video generation failed: {err}")
 
 
+def run_export_video_task(
+    invitation_id: str,
+    scenes: list[dict[str, Any]],
+    transition: Optional[str] = None,
+    title: Optional[str] = None,
+) -> None:
+    export_dir = MEDIA_DIR / invitation_id / "export"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    status_file = export_dir / "status.json"
+    work_dir = export_dir / "work"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    final_output = export_dir / "final.mp4"
+
+    def write_status(st: dict[str, Any]) -> None:
+        try:
+            status_file.write_text(json.dumps(st, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.error(f"Failed to write export status: {e}")
+
+    write_status({
+        "status": "rendering",
+        "progress": 5,
+        "stage": "Preparing video project...",
+        "error": None,
+        "url": None,
+        "fileName": None,
+        "sizeMb": None,
+    })
+
+    try:
+        logger.info(f"[{invitation_id}] Starting video export for {len(scenes)} scenes")
+        project = frontend_to_project(
+            invitation_id=invitation_id,
+            frontend_scenes=scenes,
+            media_dir=MEDIA_DIR,
+            work_dir=work_dir,
+            overall_transition=transition,
+        )
+
+        n = len(project.scenes)
+
+        def on_progress(stage: str, i: int, total: int) -> None:
+            if stage == "scene":
+                pct = round(10 + (i / max(1, total)) * 75)
+                msg = f"Rendering scene {i + 1} of {total}..."
+            elif stage == "stitch":
+                pct = 90
+                msg = "Applying scene transitions & stitching..."
+            elif stage == "done":
+                pct = 100
+                msg = "Export ready"
+            else:
+                pct = 50
+                msg = f"Processing {stage}..."
+
+            write_status({
+                "status": "rendering",
+                "progress": pct,
+                "stage": msg,
+                "error": None,
+                "url": None,
+                "fileName": None,
+                "sizeMb": None,
+            })
+
+        render_result = render_project(
+            project=project,
+            work_dir=work_dir,
+            output=final_output,
+            progress=on_progress,
+        )
+
+        size_mb = f"{final_output.stat().st_size / (1024 * 1024):.1f} MB"
+        slug = re.sub(r"[^a-z0-9]+", "-", (title or invitation_id).lower()).strip("-")
+        file_name = f"{slug or 'sky-invite'}-1080x1920.mp4"
+        media_url = f"/media/{invitation_id}/export/final.mp4"
+
+        write_status({
+            "status": "done",
+            "progress": 100,
+            "stage": "Export ready",
+            "error": None,
+            "url": media_url,
+            "fileName": file_name,
+            "sizeMb": size_mb,
+        })
+        logger.info(f"[{invitation_id}] Video export complete: {final_output} ({size_mb})")
+
+    except Exception as exc:
+        logger.error(f"[{invitation_id}] Video export failed: {exc}", exc_info=True)
+        write_status({
+            "status": "failed",
+            "progress": 0,
+            "stage": "Export failed",
+            "error": str(exc),
+            "url": None,
+            "fileName": None,
+            "sizeMb": None,
+        })
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.post("/api/create-scenes", status_code=status.HTTP_202_ACCEPTED)
@@ -632,3 +721,51 @@ def patch_scene(invitation_id: str, scene_index: int, req: PatchSceneRequest) ->
         "invitation_id": invitation_id,
         "scene": backend_scene_to_frontend(updated_scene, invitation_id, fresh_st.get("input", {})),
     }
+
+
+@app.post("/api/export-video", status_code=status.HTTP_202_ACCEPTED)
+def export_video_endpoint(req: ExportVideoRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """
+    Corresponds to api.ts:exportVideo.
+    Renders 1080x1920 MP4 combining video/still background clips and animated typography layers.
+    """
+    background_tasks.add_task(
+        run_export_video_task,
+        req.invitation_id,
+        req.scenes,
+        req.transition,
+        req.title,
+    )
+    return {"invitation_id": req.invitation_id, "status": "rendering"}
+
+
+@app.get("/api/invitations/{invitation_id}/export-status")
+def get_export_status(invitation_id: str) -> dict[str, Any]:
+    """
+    Polling endpoint returning status, progress (0-100), stage label, and file metadata when done.
+    """
+    status_file = MEDIA_DIR / invitation_id / "export" / "status.json"
+    if not status_file.exists():
+        return {
+            "status": "idle",
+            "progress": 0,
+            "stage": "Ready to export",
+            "error": None,
+            "url": None,
+            "fileName": None,
+            "sizeMb": None,
+        }
+    try:
+        data = json.loads(status_file.read_text(encoding="utf-8"))
+        return data
+    except Exception as e:
+        logger.error(f"Error reading export status: {e}")
+        return {
+            "status": "failed",
+            "progress": 0,
+            "stage": "Status read error",
+            "error": str(e),
+            "url": None,
+            "fileName": None,
+            "sizeMb": None,
+        }

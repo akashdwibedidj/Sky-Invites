@@ -576,29 +576,79 @@ export async function patchScene(
 
 /**
  * 6. exportVideo
- * Simulates final 1080x1920 MP4 compositing (background video + separate crisp text layer + falling effects).
+ * Calls POST /api/export-video, polls /api/invitations/{id}/export-status until done,
+ * and returns the final 1080x1920 video URL, filename, and size.
  */
 export async function exportVideo(
   invitation: Invitation,
   onProgress: (progress: number, stageLabel: string) => void
 ): Promise<{ url: string; fileName: string; sizeMb: string }> {
-  const stages = [
-    { pct: 15, label: 'Rendering 1080×1920 background video clips...' },
-    { pct: 40, label: 'Compositing vector typography layers...' },
-    { pct: 68, label: 'Applying scene transitions & falling particle pass...' },
-    { pct: 88, label: 'Encoding H.264 High Profile MP4...' },
-    { pct: 100, label: 'Export ready' },
-  ];
-
-  for (const st of stages) {
-    onProgress(st.pct, st.label);
-    await delay(420);
+  const invitationId = invitation.id || invitation.invitation_id || currentInvitationId;
+  if (!invitationId) {
+    throw new Error('No invitation ID found for exportVideo');
   }
 
-  const slug = invitation.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return {
-    url: `#exported-${slug || 'sky-invite'}`,
-    fileName: `${slug || 'sky-invite'}-1080x1920.mp4`,
-    sizeMb: `${(invitation.scenes.length * 4.6).toFixed(1)} MB`,
-  };
+  onProgress(5, 'Submitting render job...');
+
+  const res = await fetch(`${API_URL}/api/export-video`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      invitation_id: invitationId,
+      scenes: invitation.scenes,
+      transition: invitation.design?.transition || 'Fade',
+      title: invitation.title,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to start video export: ${res.statusText}`);
+  }
+
+  const pollInterval = 1500;
+  const maxAttempts = 240; // up to 6 minutes for full 1080x1920 render
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    await delay(pollInterval);
+    attempts++;
+
+    let data: {
+      status: 'idle' | 'rendering' | 'done' | 'failed';
+      progress: number;
+      stage: string;
+      error: string | null;
+      url: string | null;
+      fileName: string | null;
+      sizeMb: string | null;
+    } | null = null;
+
+    try {
+      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/export-status`);
+      if (statusRes.ok) {
+        data = await statusRes.json();
+      }
+    } catch (err) {
+      console.error('Error polling export status:', err);
+      continue;
+    }
+
+    if (data) {
+      onProgress(data.progress ?? 50, data.stage || 'Rendering video...');
+
+      if (data.status === 'done' && data.url) {
+        return {
+          url: resolveMediaUrl(data.url),
+          fileName: data.fileName || `${invitationId}-1080x1920.mp4`,
+          sizeMb: data.sizeMb || 'Unknown size',
+        };
+      }
+
+      if (data.status === 'failed') {
+        throw new Error(data.error || 'Video export failed on server');
+      }
+    }
+  }
+
+  throw new Error('Video export timed out');
 }

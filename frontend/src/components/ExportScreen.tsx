@@ -26,6 +26,7 @@ export const ExportScreen: React.FC = () => {
   const [exportedMeta, setExportedMeta] = useState<{
     fileName: string;
     sizeMb: string;
+    url?: string;
   } | null>(null);
 
   const [isPlayingResult, setIsPlayingResult] = useState(true);
@@ -69,7 +70,7 @@ export const ExportScreen: React.FC = () => {
         setExportProgress(pct);
         setExportStage(label);
       });
-      setExportedMeta({ fileName: result.fileName, sizeMb: result.sizeMb });
+      setExportedMeta({ fileName: result.fileName, sizeMb: result.sizeMb, url: result.url });
       updateActiveStatus('Ready', result.url);
     } finally {
       setIsExporting(false);
@@ -77,36 +78,21 @@ export const ExportScreen: React.FC = () => {
   };
 
   const handleDownload = () => {
-    // Generate a clean downloadable summary + manifest file representing the exported 1080x1920 project
-    const manifest = {
-      app: 'Sky Invites',
-      title: activeInvitation.title,
-      format: '1080x1920 MP4 (9:16 Portrait)',
-      scenes: activeInvitation.scenes.map((s) => ({
-        order: s.order,
-        title: s.title,
-        durationSec: s.durationSec,
-        transitionAfter: s.transitionAfter,
-        textLines: s.textLayer.lines.map((l) => l.text),
-      })),
-    };
-    const blob = new Blob([JSON.stringify(manifest, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
+    const videoUrl = exportedMeta?.url || activeInvitation.exportedVideoUrl;
+    if (!videoUrl) return;
+
+    const fileName = exportedMeta?.fileName || `${activeInvitation.title || 'invitation'}-1080x1920.mp4`;
+
     const a = document.createElement('a');
-    a.href = url;
-    a.download = (exportedMeta?.fileName || 'sky-invite-1080x1920.mp4').replace(
-      '.mp4',
-      '-spec.json'
-    );
+    a.href = videoUrl;
+    a.download = fileName;
+    a.target = '_blank';
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
 
     setDownloadNotice(
-      `Prepared ${exportedMeta?.fileName || 'invitation-1080x1920.mp4'} (${exportedMeta?.sizeMb || '18.4 MB'})`
+      `Downloading ${fileName} (${exportedMeta?.sizeMb || ''})`
     );
     window.setTimeout(() => setDownloadNotice(null), 4000);
   };

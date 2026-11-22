@@ -67,6 +67,14 @@ export const GenerationProgressScreen: React.FC = () => {
   const [isFinished, setIsFinished] = useState(false);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const hasStartedRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleRetryScene = async (sc: Scene) => {
     setRetryingIds((prev) => new Set(prev).add(sc.id));
@@ -106,131 +114,134 @@ export const GenerationProgressScreen: React.FC = () => {
     if (!activeInvitation || hasStartedRef.current) return;
     hasStartedRef.current = true;
 
-    let cancelled = false;
-
     const runPipeline = async () => {
-      updateActiveStatus('Generating');
+      try {
+        updateActiveStatus('Generating');
 
-      // Stage 1: Scene Splitter
-      updateNode(
-        'scene-splitter',
-        'running',
-        `Dividing ${activeInvitation.details.events.length || 1} events into ${activeInvitation.design.sceneCount} portrait scenes...`
-      );
-      const generatedScenes = await createScenes(activeInvitation);
-      if (cancelled) return;
-      setSceneChips(generatedScenes);
-      updateNode(
-        'scene-splitter',
-        'done',
-        `Structured ${generatedScenes.length} scenes with separate text layers.`
-      );
+        // Stage 1: Scene Splitter
+        updateNode(
+          'scene-splitter',
+          'running',
+          `Dividing ${activeInvitation.details.events.length || 1} events into ${activeInvitation.design.sceneCount} portrait scenes...`
+        );
+        const generatedScenes = await createScenes(activeInvitation);
+        if (!isMountedRef.current) return;
+        setSceneChips(generatedScenes);
+        updateNode(
+          'scene-splitter',
+          'done',
+          `Structured ${generatedScenes.length} scenes with separate text layers.`
+        );
 
-      // Stage 2: Parallel Specialists
-      updateNode(
-        'invitation-designer',
-        'running',
-        `Applying ${activeInvitation.design.theme} motif & ${activeInvitation.design.palette.name} palette...`
-      );
-      updateNode(
-        'audience-intent',
-        'running',
-        `Calibrating ${activeInvitation.type.toLowerCase()} tone & formal phrasing...`
-      );
-      updateNode(
-        'font-specialist',
-        'running',
-        `Pairing ${activeInvitation.design.headingFont} + ${activeInvitation.design.bodyFont}...`
-      );
+        // Stage 2: Parallel Specialists
+        updateNode(
+          'invitation-designer',
+          'running',
+          `Applying ${activeInvitation.design.theme} motif & ${activeInvitation.design.palette.name} palette...`
+        );
+        updateNode(
+          'audience-intent',
+          'running',
+          `Calibrating ${activeInvitation.type.toLowerCase()} tone & formal phrasing...`
+        );
+        updateNode(
+          'font-specialist',
+          'running',
+          `Pairing ${activeInvitation.design.headingFont} + ${activeInvitation.design.bodyFont}...`
+        );
 
-      await new Promise((r) => setTimeout(r, 950));
-      if (cancelled) return;
+        await new Promise((r) => setTimeout(r, 950));
+        if (!isMountedRef.current) return;
 
-      updateNode(
-        'invitation-designer',
-        'done',
-        `${activeInvitation.design.theme} stationery layout locked.`
-      );
-      updateNode(
-        'audience-intent',
-        'done',
-        `Etiquette & event sequence verified.`
-      );
-      updateNode(
-        'font-specialist',
-        'done',
-        `Text safe-zones calibrated for ${activeInvitation.design.textPlacement} alignment.`
-      );
+        updateNode(
+          'invitation-designer',
+          'done',
+          `${activeInvitation.design.theme} stationery layout locked.`
+        );
+        updateNode(
+          'audience-intent',
+          'done',
+          `Etiquette & event sequence verified.`
+        );
+        updateNode(
+          'font-specialist',
+          'done',
+          `Text safe-zones calibrated for ${activeInvitation.design.textPlacement} alignment.`
+        );
 
-      // Stage 3: Prompt Builder
-      updateNode(
-        'prompt-builder',
-        'running',
-        `Compiling ${generatedScenes.length} text-free 9:16 art prompts...`
-      );
-      await new Promise((r) => setTimeout(r, 600));
-      if (cancelled) return;
-      updateNode(
-        'prompt-builder',
-        'done',
-        `All ${generatedScenes.length} background prompts prepared.`
-      );
+        // Stage 3: Prompt Builder
+        updateNode(
+          'prompt-builder',
+          'running',
+          `Compiling ${generatedScenes.length} text-free 9:16 art prompts...`
+        );
+        await new Promise((r) => setTimeout(r, 600));
+        if (!isMountedRef.current) return;
+        updateNode(
+          'prompt-builder',
+          'done',
+          `All ${generatedScenes.length} background prompts prepared.`
+        );
 
-      // Stage 4: Image Generator
-      updateNode(
-        'image-generator',
-        'running',
-        activeInvitation.design.storyDriven
-          ? 'Generating scenes one after another (story-driven)...'
-          : 'Generating all scenes simultaneously in parallel...'
-      );
+        // Stage 4: Image Generator
+        updateNode(
+          'image-generator',
+          'running',
+          activeInvitation.design.storyDriven
+            ? 'Generating scenes one after another (story-driven)...'
+            : 'Generating all scenes simultaneously in parallel...'
+        );
 
-      const completedScenes = await generateImages(
-        generatedScenes,
-        activeInvitation.design.storyDriven,
-        (sceneId, status, imageUrl) => {
-          if (cancelled) return;
-          setSceneChips((prev) =>
-            prev.map((sc) =>
-              sc.id === sceneId
-                ? {
-                    ...sc,
-                    imageStatus: status,
-                    ...(imageUrl ? { imageUrl } : {}),
-                  }
-                : sc
-            )
-          );
+        const completedScenes = await generateImages(
+          generatedScenes,
+          activeInvitation.design.storyDriven,
+          (sceneId, status, imageUrl) => {
+            if (!isMountedRef.current) return;
+            setSceneChips((prev) =>
+              prev.map((sc) =>
+                sc.id === sceneId
+                  ? {
+                      ...sc,
+                      imageStatus: status,
+                      ...(imageUrl ? { imageUrl } : {}),
+                    }
+                  : sc
+              )
+            );
+          }
+        );
+
+        if (!isMountedRef.current) return;
+        const anyFailed = completedScenes.some((s) => s.imageStatus === 'failed');
+        updateNode(
+          'image-generator',
+          anyFailed ? 'running' : 'done',
+          anyFailed
+            ? `${completedScenes.filter((s) => s.imageStatus === 'done').length} of ${completedScenes.length} scenes ready. Some failed, please retry.`
+            : `All ${completedScenes.length} 9:16 backgrounds ready for layer review.`
+        );
+
+        setActiveScenes(completedScenes, 'Draft');
+        setIsFinished(true);
+
+        if (!anyFailed) {
+          await new Promise((r) => setTimeout(r, 650));
+          if (isMountedRef.current) {
+            navigateTo('step-3-review');
+          }
         }
-      );
-
-      if (cancelled) return;
-      const anyFailed = completedScenes.some((s) => s.imageStatus === 'failed');
-      updateNode(
-        'image-generator',
-        anyFailed ? 'running' : 'done',
-        anyFailed
-          ? `${completedScenes.filter((s) => s.imageStatus === 'done').length} of ${completedScenes.length} scenes ready. Some failed, please retry.`
-          : `All ${completedScenes.length} 9:16 backgrounds ready for layer review.`
-      );
-
-      setActiveScenes(completedScenes, 'Draft');
-      setIsFinished(true);
-
-      if (!anyFailed) {
-        await new Promise((r) => setTimeout(r, 650));
-        if (!cancelled) {
-          navigateTo('step-3-review');
-        }
+      } catch (err: any) {
+        console.error('Pipeline failed:', err);
+        updateNode(
+          'scene-splitter',
+          'running',
+          `Failed: ${err?.message || 'Error occurred during generation'}`
+        );
       }
     };
 
     runPipeline();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeInvitation, navigateTo, setActiveScenes, updateScene, updateActiveStatus]);
+  }, [activeInvitation?.id]);
 
   if (!activeInvitation) {
     return null;
