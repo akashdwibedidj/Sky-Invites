@@ -330,6 +330,13 @@ def generate_video_for_scene(invitation_id: str, scene_index: int) -> str:
     st = load_state(invitation_id)
     scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
 
+    # 1. Ensure scene has been analyzed first! If not, run vision analysis.
+    if not scene.get("animation_plan") or not scene.get("video_prompt"):
+        logger.info(f"[{invitation_id}] Scene {scene_index} has no animation plan; running vision analysis first...")
+        analyze_one_scene(invitation_id, scene_index, scene.get("animation_note"))
+        st = load_state(invitation_id)
+        scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
+
     plan = scene.get("animation_plan") or {}
     should_move = plan.get("shouldMove") or []
     camera_movement = plan.get("cameraMovement") or "Static"
@@ -338,19 +345,21 @@ def generate_video_for_scene(invitation_id: str, scene_index: int) -> str:
     if len(should_move) == 0 and camera_movement == "Static":
         logger.info(f"[{invitation_id}] Scene {scene_index} has no movable objects and static camera; skipping Grok call.")
         scene["video_path"] = None
-        if scene.get("animation_plan"):
-            scene["animation_plan"]["videoStatus"] = "done"
-            scene["animation_plan"]["videoProgress"] = 100
+        if not scene.get("animation_plan"):
+            scene["animation_plan"] = {}
+        scene["animation_plan"]["videoStatus"] = "done"
+        scene["animation_plan"]["videoProgress"] = 100
         save_state(invitation_id, st)
         return ""
 
     image_full_path = PROJECT_ROOT / scene["image_path"]
     output_path = vid_path(invitation_id, scene_index)
 
-    if scene.get("animation_plan"):
-        scene["animation_plan"]["videoStatus"] = "generating"
-        scene["animation_plan"]["videoProgress"] = 20
-        save_state(invitation_id, st)
+    if not scene.get("animation_plan"):
+        scene["animation_plan"] = {}
+    scene["animation_plan"]["videoStatus"] = "generating"
+    scene["animation_plan"]["videoProgress"] = 20
+    save_state(invitation_id, st)
 
     try:
         grok.generate_video(
@@ -360,13 +369,20 @@ def generate_video_for_scene(invitation_id: str, scene_index: int) -> str:
         )
         relative_vid = rel(output_path)
         scene["video_path"] = relative_vid
-        if scene.get("animation_plan"):
-            scene["animation_plan"]["videoStatus"] = "done"
-            scene["animation_plan"]["videoProgress"] = 100
+        scene["animation_plan"]["videoStatus"] = "done"
+        scene["animation_plan"]["videoProgress"] = 100
         save_state(invitation_id, st)
         return relative_vid
     except Exception as e:
-        if scene.get("animation_plan"):
+        logger.error(f"[{invitation_id}] generate_video_for_scene {scene_index} error: {e}", exc_info=True)
+        try:
+            st = load_state(invitation_id)
+            scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
+            if not scene.get("animation_plan"):
+                scene["animation_plan"] = {}
             scene["animation_plan"]["videoStatus"] = "failed"
+            scene["animation_plan"]["videoProgress"] = 0
             save_state(invitation_id, st)
+        except Exception:
+            pass
         raise e

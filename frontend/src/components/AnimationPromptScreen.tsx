@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -32,8 +32,20 @@ export const AnimationPromptScreen: React.FC = () => {
     navigateTo,
   } = useInvitations();
 
-  const [analyzingSceneId, setAnalyzingSceneId] = useState<string | null>(null);
+  const [analyzingSceneIds, setAnalyzingSceneIds] = useState<string[]>([]);
   const [isGeneratingVideos, setIsGeneratingVideos] = useState(false);
+
+  useEffect(() => {
+    // Automatically run vision analysis on any scene that hasn't been analyzed yet
+    if (activeInvitation && activeInvitation.scenes.length > 0) {
+      activeInvitation.scenes.forEach((sc) => {
+        const plan = sc.animationPlan;
+        if (!plan || !plan.objectsDetected || plan.objectsDetected.length === 0) {
+          handleReanalyze(sc.id);
+        }
+      });
+    }
+  }, []);
 
   if (!activeInvitation || activeInvitation.scenes.length === 0) {
     return (
@@ -56,12 +68,14 @@ export const AnimationPromptScreen: React.FC = () => {
   const handleReanalyze = async (sceneId: string) => {
     const target = scenes.find((s) => s.id === sceneId);
     if (!target) return;
-    setAnalyzingSceneId(sceneId);
+    setAnalyzingSceneIds((prev) => (prev.includes(sceneId) ? prev : [...prev, sceneId]));
     try {
       const plan = await analyzeImage(target, target.animationNote);
       updateSceneAnimationPlan(sceneId, () => plan);
+    } catch (err) {
+      console.error(`Failed to analyze scene ${sceneId}:`, err);
     } finally {
-      setAnalyzingSceneId(null);
+      setAnalyzingSceneIds((prev) => prev.filter((id) => id !== sceneId));
     }
   };
 
@@ -229,7 +243,7 @@ export const AnimationPromptScreen: React.FC = () => {
               key={sc.id}
               className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-7 shadow-[0_2px_12px_rgba(28,25,23,0.02)] grid grid-cols-1 md:grid-cols-12 gap-6 items-start"
             >
-              {/* Left: 9:16 Scene Plate or Looping Motion Preview */}
+              {/* Left: 9:16 Scene Plate or Motion Preview */}
               <div className="md:col-span-4 lg:col-span-3 flex flex-col items-center">
                 <div className="w-full max-w-[220px] relative">
                   <PhoneFrame
@@ -241,7 +255,7 @@ export const AnimationPromptScreen: React.FC = () => {
                   {isVideoReady && (
                     <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[11px] font-medium text-emerald-700">
                       <Play className="w-3 h-3 fill-emerald-700" />
-                      <span>Looping 9:16 video preview</span>
+                      <span>9:16 video preview</span>
                     </div>
                   )}
                 </div>
@@ -268,11 +282,11 @@ export const AnimationPromptScreen: React.FC = () => {
 
                   <button
                     type="button"
-                    disabled={analyzingSceneId === sc.id}
+                    disabled={analyzingSceneIds.includes(sc.id)}
                     onClick={() => handleReanalyze(sc.id)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg transition-colors self-start cursor-pointer"
                   >
-                    {analyzingSceneId === sc.id ? (
+                    {analyzingSceneIds.includes(sc.id) ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 text-[#B88B58]" />
@@ -359,12 +373,19 @@ export const AnimationPromptScreen: React.FC = () => {
                     </label>
                     <select
                       value={plan.cameraMovement}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const nextMovement = e.target.value as CameraMovement;
                         updateSceneAnimationPlan(sc.id, (prev) => ({
                           ...prev,
-                          cameraMovement: e.target.value as CameraMovement,
-                        }))
-                      }
+                          cameraMovement: nextMovement,
+                        }));
+                        patchScene(sc, {
+                          animation_plan: {
+                            ...sc.animationPlan,
+                            cameraMovement: nextMovement,
+                          },
+                        }).catch(console.error);
+                      }}
                       className="w-full px-3 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
                     >
                       {CAMERA_MOVEMENTS.map((mv) => (

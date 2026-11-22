@@ -17,10 +17,176 @@ Internally use zero-based indexing (scene_index 0 to {max_scene_index}).
 CATEGORY RULES:
 {category_rules_text}
 
+
 SCENE ALLOCATION STRUCTURE:
-- Exactly {num_scenes} scenes must be returned.
-- Scene 0 is ALWAYS the IDENTITY scene: it must immediately show who or what the invitation is for. Never postpone names or event title to later scenes.
-{scene_count_rules}
+
+Return exactly {num_scenes} scenes.
+
+You must intelligently distribute ALL supplied invitation
+information across the requested number of scenes.
+
+Do not use a fixed template blindly. First analyse how much
+information is available, then decide the best distribution.
+
+GENERAL RULES:
+
+1. Scene 0 must ALWAYS be the IDENTITY scene.
+   It must immediately communicate who or what the invitation
+   is for.
+
+2. Every scene must have a clear purpose and a meaningful role
+   in the overall invitation sequence.
+
+3. All important supplied information must appear somewhere
+   across the complete set of scenes.
+
+4. Never omit factual information simply because the number
+   of scenes is limited.
+
+5. Never force unnecessary repetition or meaningless filler
+   simply because more scenes have been requested.
+
+6. Keep related information together wherever possible.
+
+7. Arrange scenes in a natural reading order, from introduction
+   to event information and finally to closing.
+
+DYNAMIC SCENE ALLOCATION:
+
+A. WHEN ONLY 1 SCENE IS REQUESTED:
+
+- Create one complete invitation.
+- Include the identity, hosts, event title, description,
+  programme, date, time, venue, address and RSVP wherever
+  those details are supplied.
+- Organise all information into clear text groups.
+- Never sacrifice event details for decorative minimalism.
+
+B. WHEN 2 SCENES ARE REQUESTED:
+
+Scene 1: Identity and Main Invitation
+- Hosts or organisation.
+- Event title.
+- Main invitation message.
+- Important introductory information.
+
+Scene 2: Event Information
+- Programme or agenda.
+- Date and time.
+- Venue and complete address.
+- RSVP and additional instructions.
+
+Move information between the scenes if necessary to
+maintain a balanced layout and preserve all details.
+
+C. WHEN 3 SCENES ARE REQUESTED:
+
+Scene 1: Identity and Invitation Introduction.
+Scene 2: Programme, Event Highlights or Main Information.
+Scene 3: Date, Time, Venue, Address, RSVP and Closing.
+
+D. WHEN 4 SCENES ARE REQUESTED:
+
+Scene 1: Event Identity and Main Invitation.
+Scene 2: Event Introduction, Purpose or Programme.
+Scene 3: Date, Time and Schedule.
+Scene 4: Venue, Address, RSVP and Closing Message.
+
+E. WHEN 5 SCENES ARE REQUESTED:
+
+Scene 1: Event Identity.
+Scene 2: Invitation Introduction and Hosts.
+Scene 3: Programme, Agenda or Highlights.
+Scene 4: Date, Time, Venue and Location.
+Scene 5: RSVP, Additional Instructions and Closing.
+
+F. WHEN 6 OR MORE SCENES ARE REQUESTED:
+
+Create a logical sequence based on the actual information.
+
+Possible scene roles include:
+
+- identity
+- invitation_introduction
+- event_overview
+- programme
+- agenda
+- event_highlights
+- speaker_information
+- special_announcements
+- date_and_time
+- venue_and_location
+- additional_information
+- rsvp
+- closing
+
+Use only roles relevant to the supplied information.
+
+Split lengthy programme details, multiple agenda items,
+multiple speakers or multiple event sections into separate
+scenes when appropriate.
+
+Do not create unnecessary scenes just to follow this list.
+
+ADAPTIVE INFORMATION DISTRIBUTION:
+
+Before allocating scenes:
+
+1. Identify every unique piece of information supplied.
+2. Group related information into logical categories.
+3. Estimate the amount of content each scene can comfortably
+   accommodate.
+4. Distribute information according to the requested scene count.
+5. Preserve the natural reading order.
+6. Check that no important information has been omitted.
+
+BALANCED SCENE LENGTH:
+
+- Avoid putting almost all the information in the first scene.
+- Avoid leaving later scenes unnecessarily empty.
+- Distribute content as evenly as practical.
+- Keep related details together rather than splitting them
+  randomly.
+- Short scenes are acceptable when they have a clear purpose.
+
+WHEN THERE IS MORE SCENES THAN AVAILABLE INFORMATION:
+
+This is especially important.
+
+If the user requests more scenes than the amount of unique
+information can naturally support:
+
+1. Do not invent event information.
+2. Do not create fake programme items, speakers, dates,
+   locations or announcements.
+3. Do not repeat the same paragraph across multiple scenes.
+4. First try splitting longer information into smaller,
+   logically connected sections.
+5. If there is still insufficient information, create
+   visually led supporting scenes with minimal or no text.
+6. Give these scenes a meaningful visual storytelling role,
+   such as an elegant transition, decorative interlude,
+   thematic event artwork or closing visual.
+7. Keep the overall invitation sequence coherent and complete.
+
+A scene does not need to contain a large amount of text
+to be meaningful.
+
+FINAL COMPLETENESS CHECK:
+
+Before returning the JSON:
+
+- Verify that every supplied factual detail is represented.
+- Verify that no information has been invented.
+- Verify that no scene is unnecessarily repetitive.
+- Verify that every requested scene has a distinct purpose.
+- Verify that the sequence reads naturally from beginning
+  to end.
+- Verify that the number of scenes is exactly {num_scenes}.
+
+The scene allocation must adapt to BOTH the amount of
+information supplied and the number of requested scenes.
+
 
 CONTENT & FACTUALITY RULES:
 1. ONLY use facts supplied in the input. NEVER invent names, surnames, milestones, dates, times, venues, addresses, programme items, or RSVP details.
@@ -29,6 +195,30 @@ CONTENT & FACTUALITY RULES:
 4. Each scene must have one clear purpose. Do not repeat facts across scenes just to fill space.
 5. If there are few details supplied, create meaningful scenes with clear visual direction and minimal, elegant text rather than fabricating information.
 6. visual_direction describes the designed stationery backdrop aesthetic for this specific scene (no text inside the image artwork).
+
+7. INFORMATION COMPLETENESS:
+   Every unique factual detail supplied by the user must be
+   included in at least one scene. Never silently discard
+   information.
+
+8. CROSS-SCENE CONSISTENCY:
+   Names, dates, times, addresses, event titles and other
+   facts must remain exactly consistent across all scenes.
+
+9. NO ARTIFICIAL FILLER:
+   Never invent information or repeat paragraphs just to
+   fill the requested number of scenes.
+
+10. ADAPTIVE CONTENT DENSITY:
+    Scene text length should depend on the amount of available
+    information and the number of requested scenes.
+
+11. VISUAL-ONLY SCENES:
+    If there is insufficient factual information to fill
+    every scene, allow a meaningful visual-only scene with
+    empty text fields. Its visual_direction should still
+    describe a purposeful part of the invitation collection.
+
 
 Return ONLY valid JSON (no markdown fences, no explanatory text):
 {{
@@ -383,6 +573,8 @@ STATIC CAMERA - SELECTIVE OBJECT ANIMATION.
 CAMERA RULE (ABSOLUTE):
 - The camera must be completely locked: "Static".
 - Zero zoom, pan, tilt, rotation, dolly, parallax, or camera shake.
+- Absolutely zero zoom in and zero zoom out effect in the video.
+- The first frame and last frame must be identical.
 - Requests to animate objects (e.g. "make it animated", "move the flowers", "bring to life") NEVER cause camera movement.
 - Camera movement is permitted ONLY if the user explicitly requested camera movement by naming one of the allowed camera moves: "Slow zoom in", "Parallax", "Pan left/right". Otherwise, cameraMovement MUST be "Static".
 
@@ -398,13 +590,14 @@ ELEMENT ANALYSIS RULES:
 
 GROK PROMPT REQUIREMENTS:
 Write a vivid, precise 80–120 word image-to-video motion prompt for Grok:
-- State clearly that the input image is the source first frame and must be preserved.
+- State clearly that the input image is the source first frame and must be preserved with 100% fidelity.
 - Image-to-video animation, NOT scene generation or text-to-video.
-- Camera is completely locked and static.
-- Only the specific identified movable elements move with delicate, smooth, loop-friendly motion.
+- Camera is completely locked and static. Zero zoom in and zero zoom out effect.
+- The first frame and the last frame of the video must be identical.
+- Only the specific identified movable elements move with delicate, smooth, natural ambient motion.
 - All borders, frames, typography negative space, and composition maintain exact position, color, texture, and proportions.
 - No cuts, transitions, morphing, warping, new objects, or human figures.
-- End with: "Portrait 9:16, completely static locked camera, subtle loop-friendly motion."
+- End with: "Portrait 9:16, completely static locked camera, no zoom in or out, first and last frames identical, subtle ambient motion."
 
 Return ONLY valid JSON (no markdown fences, no explanatory text):
 {{

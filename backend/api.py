@@ -39,6 +39,8 @@ from storage import (
     video_path as get_video_path,
     rel,
 )
+from db import Invitation, Scene, get_session
+from sqlalchemy import func
 from graph1.nodes import (
     split_scenes,
     style_bible,
@@ -118,6 +120,7 @@ class PatchSceneRequest(BaseModel):
     image_prompt: Optional[str] = None
     video_prompt: Optional[str] = None
     animation_note: Optional[str] = None
+    animation_plan: Optional[dict[str, Any]] = None
 
 
 class ExportVideoRequest(BaseModel):
@@ -249,13 +252,18 @@ def run_create_scenes_task(invitation_id: str, inv_input: dict[str, Any]) -> Non
         st["status"] = "running"
         save_state(invitation_id, st)
 
+        # Strip frontend_invitation from user_input before passing to LLMs.
+        # It is a large stored blob that serves the reopen-invitation feature only
+        # and must never be sent to the LLM (would blow the context window).
+        llm_input = {k: v for k, v in inv_input.items() if k != "frontend_invitation"}
+
         # 1. split_scenes
-        split_res = split_scenes({"invitation_id": invitation_id, "input": inv_input})
+        split_res = split_scenes({"invitation_id": invitation_id, "input": llm_input})
         st = load_state(invitation_id)
         scenes = st["scenes"]
 
         # 2. style_bible
-        bible_res = style_bible({"invitation_id": invitation_id, "input": inv_input})
+        bible_res = style_bible({"invitation_id": invitation_id, "input": llm_input})
         st = load_state(invitation_id)
 
         # 3. build_prompt_scene in parallel
@@ -266,7 +274,7 @@ def run_create_scenes_task(invitation_id: str, inv_input: dict[str, Any]) -> Non
                     build_prompt_scene,
                     {
                         "invitation_id": invitation_id,
-                        "input": inv_input,
+                        "input": llm_input,
                         "style_bible": st["style_bible"],
                         "_current_scene": sc,
                     },
@@ -422,6 +430,16 @@ def run_generate_video_task(invitation_id: str, scene_index: int) -> None:
         generate_video_for_scene(invitation_id, scene_index)
     except Exception as err:
         logger.error(f"[{invitation_id}] Scene {scene_index} video generation failed: {err}")
+        try:
+            st = load_state(invitation_id)
+            scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
+            if not scene.get("animation_plan"):
+                scene["animation_plan"] = {}
+            scene["animation_plan"]["videoStatus"] = "failed"
+            scene["animation_plan"]["videoProgress"] = 0
+            save_state(invitation_id, st)
+        except Exception:
+            pass
 
 
 def run_export_video_task(
@@ -536,6 +554,7 @@ def create_scenes_endpoint(req: CreateScenesRequest, background_tasks: Backgroun
     raw_inv = req.invitation
     inv_id = str(raw_inv.get("id") or uuid.uuid4().hex[:8])
     backend_input = frontend_to_backend_input(raw_inv)
+    backend_input["frontend_invitation"] = raw_inv
 
     create_invitation(inv_id, backend_input)
     background_tasks.add_task(run_create_scenes_task, inv_id, backend_input)
@@ -663,6 +682,57 @@ def get_invitation_status(invitation_id: str) -> dict[str, Any]:
     }
 
 
+@app.get("/api/invitations")
+def list_invitations() -> list[dict[str, Any]]:
+    """
+    List saved invitations, newest first.
+    Includes invitation_id, title, type, created_at, status, scene_count.
+    """
+    with get_session() as session:
+        invs = (
+            session.query(Invitation)
+            .order_by(Invitation.created_at.desc())
+            .all()
+        )
+        result = []
+        for inv in invs:
+            scene_count = (
+                session.query(func.count(Scene.id))
+                .filter(Scene.invitation_id == inv.id)
+                .scalar() or 0
+            )
+            f_inv = (inv.user_input or {}).get("frontend_invitation") or {}
+            
+            # Rule 4: title for old invitations: bride/groom, honoree or host name, else the id
+            title = f_inv.get("title")
+            if not title:
+                u_input = inv.user_input or {}
+                bride = u_input.get("bride_name", "")
+                groom = u_input.get("groom_name", "")
+                honoree = u_input.get("honoree_name", "")
+                host = u_input.get("host_name", "")
+                if bride and groom:
+                    title = f"{groom.split(' ')[0]} weds {bride.split(' ')[0]}"
+                elif bride or groom:
+                    title = bride or groom
+                elif honoree:
+                    title = honoree
+                elif host:
+                    title = host
+                else:
+                    title = inv.id
+
+            result.append({
+                "invitation_id": inv.id,
+                "title": title,
+                "type": (inv.type or f_inv.get("type") or "Custom").capitalize(),
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "status": inv.status or "pending",
+                "scene_count": scene_count,
+            })
+        return result
+
+
 @app.get("/api/invitations/{invitation_id}")
 def get_invitation(invitation_id: str) -> dict[str, Any]:
     """
@@ -682,6 +752,8 @@ def get_invitation(invitation_id: str) -> dict[str, Any]:
     return {
         "invitation_id": invitation_id,
         "style_bible": st.get("style_bible"),
+        "frontend_invitation": inv_input.get("frontend_invitation"),
+        "user_input": inv_input,
         "scenes": scenes,
     }
 
@@ -708,8 +780,14 @@ def patch_scene(invitation_id: str, scene_index: int, req: PatchSceneRequest) ->
         fields_to_update["image_prompt"] = req.image_prompt
     if req.video_prompt is not None:
         fields_to_update["video_prompt"] = req.video_prompt
+        if scene.get("animation_plan"):
+            plan_copy = dict(scene["animation_plan"])
+            plan_copy["grokPrompt"] = req.video_prompt
+            fields_to_update["animation_plan"] = plan_copy
     if req.animation_note is not None:
         fields_to_update["animation_note"] = req.animation_note
+    if req.animation_plan is not None:
+        fields_to_update["animation_plan"] = req.animation_plan
 
     if fields_to_update:
         update_scene(invitation_id, scene_index, **fields_to_update)

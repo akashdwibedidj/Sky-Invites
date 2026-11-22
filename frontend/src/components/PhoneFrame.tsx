@@ -321,7 +321,6 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
           <video
             src={scene.videoUrl}
             autoPlay
-            loop
             muted
             playsInline
             className="w-full h-full object-cover"

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   CheckCircle2,
@@ -13,8 +13,9 @@ import {
 } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
 import { GENERATED_SCENE_IMAGES } from '../data/mockInvitations';
-import { InvitationStatus } from '../types/invitation';
+import { InvitationStatus, ScreenRoute } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
+import { listSavedInvitations, getSavedInvitation, SavedInvitationSummary } from '../services/api';
 
 const STATUS_FILTERS: ('All' | InvitationStatus)[] = ['All', 'Ready', 'Generating', 'Draft'];
 
@@ -51,10 +52,36 @@ export const DashboardScreen: React.FC = () => {
     openInvitation,
     deleteInvitation,
     restoreDemoInvitations,
+    loadSavedInvitation,
   } = useInvitations();
 
   const [filter, setFilter] = useState<'All' | InvitationStatus>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [savedList, setSavedList] = useState<SavedInvitationSummary[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSavedLoading(true);
+    listSavedInvitations()
+      .then((list) => setSavedList(list.filter((inv) => inv.scene_count > 0)))
+      .catch(console.error)
+      .finally(() => setSavedLoading(false));
+  }, []);
+
+  const handleOpenSaved = async (invId: string) => {
+    setOpeningId(invId);
+    try {
+      const invitation = await getSavedInvitation(invId);
+      const hasVideos = invitation.scenes.some((s) => s.videoUrl);
+      const target: ScreenRoute = hasVideos ? 'step-4-animation' : 'step-3-review';
+      loadSavedInvitation(invitation, target);
+    } catch (err) {
+      console.error('Failed to open invitation', err);
+    } finally {
+      setOpeningId(null);
+    }
+  };
 
   const filteredInvitations = useMemo(() => {
     return invitations.filter((inv) => {
@@ -294,6 +321,43 @@ export const DashboardScreen: React.FC = () => {
             );
           })}
         </div>
+      )}
+      {/* Saved Invitations from Server */}
+      {(savedLoading || savedList.length > 0) && (
+        <section className="mt-12 pt-8 border-t border-stone-200/80">
+          <h2 className="font-serif text-xl font-semibold text-stone-900 mb-4">Saved Invitations</h2>
+          {savedLoading ? (
+            <div className="flex items-center gap-2 text-sm text-stone-500">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Loading saved invitations...</span>
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-100 rounded-2xl border border-stone-200 bg-white overflow-hidden">
+              {savedList.map((inv) => (
+                <div key={inv.invitation_id} className="flex items-center justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="font-serif text-base font-semibold text-stone-900 truncate">{inv.title}</p>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      {inv.type} · {inv.scene_count} scenes
+                      {inv.created_at ? ` · ${new Date(inv.created_at).toLocaleDateString()}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={inv.scene_count === 0 || openingId === inv.invitation_id}
+                    onClick={() => handleOpenSaved(inv.invitation_id)}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {openingId === inv.invitation_id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : null}
+                    {inv.scene_count === 0 ? 'No scenes' : 'Open'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
     </main>
   );

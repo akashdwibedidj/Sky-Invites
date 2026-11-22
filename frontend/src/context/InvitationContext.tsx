@@ -34,6 +34,7 @@ interface InvitationContextValue {
   deleteInvitation: (id: string) => void;
   restoreDemoInvitations: () => void;
   clearAllInvitations: () => void;
+  loadSavedInvitation: (invitation: Invitation, targetScreen: ScreenRoute) => void;
 }
 
 const InvitationContext = createContext<InvitationContextValue | null>(null);
@@ -240,6 +241,22 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setCurrentScreen('dashboard');
   }, []);
 
+  const loadSavedInvitation = useCallback(
+    (invitation: Invitation, targetScreen: ScreenRoute) => {
+      setInvitations((prev) => {
+        const exists = prev.some((inv) => inv.id === invitation.id);
+        if (exists) {
+          return prev.map((inv) => (inv.id === invitation.id ? invitation : inv));
+        }
+        return [invitation, ...prev];
+      });
+      setActiveInvitationId(invitation.id);
+      setSelectedSceneId(invitation.scenes[0]?.id ?? null);
+      navigateTo(targetScreen);
+    },
+    [navigateTo]
+  );
+
   return (
     <InvitationContext.Provider
       value={{
@@ -265,6 +282,7 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         deleteInvitation,
         restoreDemoInvitations,
         clearAllInvitations,
+        loadSavedInvitation,
       }}
     >
       {children}

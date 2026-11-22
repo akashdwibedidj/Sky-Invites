@@ -3,8 +3,12 @@ import {
   AnimationPlan,
   CameraMovement,
   Invitation,
+  InvitationType,
+  PageTransition,
   Scene,
+  TextAnimation,
   TextLine,
+  ThemeStyle,
 } from '../types/invitation';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -554,6 +558,7 @@ export async function patchScene(
     image_prompt?: string;
     video_prompt?: string;
     animation_note?: string;
+    animation_plan?: any;
   }
 ): Promise<Scene> {
   const { invitationId, sceneIndex } = extractInvitationId(scene);
@@ -651,4 +656,120 @@ export async function exportVideo(
   }
 
   throw new Error('Video export timed out');
+}
+
+export interface SavedInvitationSummary {
+  invitation_id: string;
+  title: string;
+  type: string;
+  created_at: string | null;
+  status: string;
+  scene_count: number;
+}
+
+export async function listSavedInvitations(): Promise<SavedInvitationSummary[]> {
+  const res = await fetch(`${API_URL}/api/invitations`);
+  if (!res.ok) {
+    throw new Error(`Failed to list invitations: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getSavedInvitation(invitationId: string): Promise<Invitation> {
+  const res = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  if (!res.ok) {
+    throw new Error(`Failed to get invitation: ${res.statusText}`);
+  }
+  const data = await res.json();
+
+  const scenes: Scene[] = (data.scenes || []).map((sc: any) => ({
+    ...sc,
+    imageUrl: resolveMediaUrl(sc.imageUrl),
+    videoUrl: sc.videoUrl ? resolveMediaUrl(sc.videoUrl) : undefined,
+    invitation_id: invitationId,
+  }));
+
+  if (data.frontend_invitation) {
+    return {
+      ...data.frontend_invitation,
+      id: invitationId,
+      invitation_id: invitationId,
+      scenes,
+    };
+  }
+
+  // Fallback reconstruction for older invitations created before frontend_invitation storage
+  const u = data.user_input || {};
+  const bride = u.bride_name || '';
+  const groom = u.groom_name || '';
+  const honoree = u.honoree_name || '';
+  const host = u.host_name || '';
+  let title = '';
+  if (bride && groom) {
+    title = `${groom.split(' ')[0]} weds ${bride.split(' ')[0]}`;
+  } else if (bride || groom) {
+    title = bride || groom;
+  } else if (honoree) {
+    title = honoree;
+  } else if (host) {
+    title = host;
+  } else {
+    title = invitationId;
+  }
+
+  const rawType = u.invitation_type || 'Wedding';
+  const invType = (rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase()) as InvitationType;
+
+  return {
+    id: invitationId,
+    invitation_id: invitationId,
+    title,
+    type: invType,
+    status: scenes.every((s) => s.imageStatus === 'done') ? 'Ready' : 'Generating',
+    createdAt: u.created_at || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    details: {
+      brideName: bride,
+      groomName: groom,
+      brideParents: u.bride_parents || '',
+      groomParents: u.groom_parents || '',
+      honoreeName: honoree,
+      hostName: host,
+      events: (u.events || []).map((ev: any, idx: number) => ({
+        id: `ev-${idx}`,
+        name: ev.name || '',
+        date: ev.date || '',
+        time: ev.time || '',
+        venue: ev.venue || '',
+      })),
+      message: u.message || '',
+      referencePhotos: [],
+    },
+    design: {
+      sceneCount: u.num_scenes || scenes.length || 2,
+      transition: (u.transition_type
+        ? u.transition_type.charAt(0).toUpperCase() + u.transition_type.slice(1).toLowerCase()
+        : 'Dissolve') as PageTransition,
+      fallingEffects: ['None'],
+      fallingEffectIntensity: 50,
+      theme: (u.theme || 'Modern') as ThemeStyle,
+      palette: {
+        id: 'champagne-ivory',
+        name: 'Champagne & Ivory',
+        primary: '#F5F0E6',
+        secondary: '#FAF6EE',
+        accent: '#D9C6A2',
+        text: '#292524',
+      },
+      textPlacement: scenes[0]?.textLayer?.placement || 'center',
+      textAlignment: scenes[0]?.textLayer?.alignment || 'center',
+      headingFont: u.heading_font || 'Playfair Display',
+      bodyFont: u.body_font || 'Cormorant Garamond',
+      textAnimation: (u.text_animation || 'Slide-up') as TextAnimation,
+      durationPerScene: u.duration_per_scene || 3,
+      musicMood: 'Elegant',
+      storyDriven: u.story_mode ?? true,
+    },
+    scenes,
+  };
 }
