@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { createEmptyInvitationDraft, MOCK_INVITATIONS } from '../data/mockInvitations';
 import {
   AnimationPlan,
@@ -10,6 +11,36 @@ import {
   ScreenRoute,
   TextLayer,
 } from '../types/invitation';
+
+// ── Route helpers ─────────────────────────────────────────────────────────────
+
+export function screenRouteToPath(screen: ScreenRoute, invitationId?: string | null): string {
+  switch (screen) {
+    case 'dashboard':       return '/';
+    case 'create-type':     return '/create';
+    case 'step-1-details':  return '/create/details';
+    case 'step-2-design':   return '/create/design';
+    case 'generating':      return invitationId ? `/invitation/${invitationId}/generating` : '/create';
+    case 'step-3-review':   return invitationId ? `/invitation/${invitationId}/review`     : '/';
+    case 'step-4-animation':return invitationId ? `/invitation/${invitationId}/animation`  : '/';
+    case 'step-5-compose':  return invitationId ? `/invitation/${invitationId}/compose`    : '/';
+    case 'step-6-export':   return invitationId ? `/invitation/${invitationId}/export`     : '/';
+    default:                return '/';
+  }
+}
+
+export function pathToScreenRoute(pathname: string): ScreenRoute {
+  if (pathname === '/' || pathname === '')               return 'dashboard';
+  if (pathname === '/create')                            return 'create-type';
+  if (pathname === '/create/details')                    return 'step-1-details';
+  if (pathname === '/create/design')                     return 'step-2-design';
+  if (/\/invitation\/[^/]+\/generating/.test(pathname))  return 'generating';
+  if (/\/invitation\/[^/]+\/review/.test(pathname))      return 'step-3-review';
+  if (/\/invitation\/[^/]+\/animation/.test(pathname))   return 'step-4-animation';
+  if (/\/invitation\/[^/]+\/compose/.test(pathname))     return 'step-5-compose';
+  if (/\/invitation\/[^/]+\/export/.test(pathname))      return 'step-6-export';
+  return 'dashboard';
+}
 
 interface InvitationContextValue {
   invitations: Invitation[];
@@ -43,8 +74,13 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [invitations, setInvitations] = useState<Invitation[]>(MOCK_INVITATIONS);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState<boolean>(true);
   const [activeInvitationId, setActiveInvitationId] = useState<string | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<ScreenRoute>('dashboard');
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive currentScreen from the URL so TopBar stepper stays in sync
+  const currentScreen: ScreenRoute = pathToScreenRoute(location.pathname);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoadingDashboard(false), 450);
@@ -54,9 +90,10 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const activeInvitation = invitations.find((inv) => inv.id === activeInvitationId) ?? null;
 
   const navigateTo = useCallback((screen: ScreenRoute) => {
-    setCurrentScreen(screen);
+    const path = screenRouteToPath(screen, activeInvitationId);
+    navigate(path);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [navigate, activeInvitationId]);
 
   const openInvitation = useCallback(
     (id: string, targetScreen?: ScreenRoute) => {
@@ -65,27 +102,26 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setActiveInvitationId(id);
       setSelectedSceneId(found.scenes[0]?.id ?? null);
 
+      let screen: ScreenRoute;
       if (targetScreen) {
-        navigateTo(targetScreen);
-        return;
-      }
-
-      if (found.status === 'Ready' && found.scenes.length > 0) {
-        navigateTo('step-5-compose');
+        screen = targetScreen;
+      } else if (found.status === 'Ready' && found.scenes.length > 0) {
+        screen = 'step-5-compose';
       } else if (found.scenes.length > 0) {
-        navigateTo('step-3-review');
+        screen = 'step-3-review';
       } else {
-        navigateTo('step-1-details');
+        screen = 'step-1-details';
       }
+      navigate(screenRouteToPath(screen, id));
     },
-    [invitations, navigateTo]
+    [invitations, navigate]
   );
 
   const startNewInvitationFlow = useCallback(() => {
     setActiveInvitationId(null);
     setSelectedSceneId(null);
-    navigateTo('create-type');
-  }, [navigateTo]);
+    navigate('/create');
+  }, [navigate]);
 
   const createDraftFromType = useCallback(
     (type: InvitationType) => {
@@ -93,9 +129,9 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setInvitations((prev) => [draft, ...prev]);
       setActiveInvitationId(draft.id);
       setSelectedSceneId(null);
-      navigateTo('step-1-details');
+      navigate('/create/details');
     },
-    [navigateTo]
+    [navigate]
   );
 
   const updateActiveInvitation = useCallback(
@@ -154,8 +190,10 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         invitation_id: id,
       }));
       setActiveInvitationId(id);
+      // Also update the URL so the generating screen gets the real ID
+      navigate(`/invitation/${id}/generating`, { replace: true });
     },
-    [updateActiveInvitation]
+    [updateActiveInvitation, navigate]
   );
 
   const setActiveScenes = useCallback(
@@ -225,10 +263,10 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setInvitations((prev) => prev.filter((inv) => inv.id !== id));
       if (activeInvitationId === id) {
         setActiveInvitationId(null);
-        setCurrentScreen('dashboard');
+        navigate('/');
       }
     },
-    [activeInvitationId]
+    [activeInvitationId, navigate]
   );
 
   const restoreDemoInvitations = useCallback(() => {
@@ -238,8 +276,8 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const clearAllInvitations = useCallback(() => {
     setInvitations([]);
     setActiveInvitationId(null);
-    setCurrentScreen('dashboard');
-  }, []);
+    navigate('/');
+  }, [navigate]);
 
   const loadSavedInvitation = useCallback(
     (invitation: Invitation, targetScreen: ScreenRoute) => {
@@ -252,9 +290,9 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
       setActiveInvitationId(invitation.id);
       setSelectedSceneId(invitation.scenes[0]?.id ?? null);
-      navigateTo(targetScreen);
+      navigate(screenRouteToPath(targetScreen, invitation.id));
     },
-    [navigateTo]
+    [navigate]
   );
 
   return (

@@ -18,7 +18,7 @@ import {
 import { useInvitations } from '../context/InvitationContext';
 import { GOOGLE_FONT_OPTIONS } from '../data/mockInvitations';
 import { editImageWithInstruction, patchScene, regenerateImage } from '../services/api';
-import { TextAlignment, TextLine, TextPlacement } from '../types/invitation';
+import { TextAlignment, TextLayer, TextLine, TextPlacement } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
 
 const TEXT_COLOR_SWATCHES = ['#292524', '#382510', '#3A2826', '#687860', '#8F6534', '#FAF6EE'];
