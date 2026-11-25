@@ -128,11 +128,11 @@ export const ComposeScreen: React.FC = () => {
   if (!activeInvitation || scenes.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-16 text-center">
-        <p className="text-stone-600">No scenes ready to compose yet.</p>
+        <p className="text-stone-600">No cards ready to preview yet.</p>
         <button
           type="button"
           onClick={() => navigateTo('step-3-review')}
-          className="mt-4 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium cursor-pointer"
+          className="mt-4 px-5 py-2.5 rounded-xl bg-[var(--color-peacock)] text-white text-sm font-medium cursor-pointer"
         >
           Go to Image Review
         </button>
@@ -180,14 +180,14 @@ export const ComposeScreen: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-stone-200/80">
         <div>
-          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[#A27644] mb-1.5">
+          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[var(--color-peacock-deep)] mb-1.5">
             Stage 5 · Timeline & Text Compositing
           </p>
           <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-stone-900">
             Compose Invitation Film
           </h1>
           <p className="mt-1 text-sm text-stone-600">
-            Fine-tune text timing, clip transitions, and atmospheric overlays before exporting 1080 × 1920 MP4.
+            Fine-tune text timing, clip transitions, and atmospheric overlays before preparing your video.
           </p>
         </div>
 
@@ -203,9 +203,9 @@ export const ComposeScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => navigateTo('step-6-export')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl shadow-sm transition-colors cursor-pointer"
           >
-            <span>Proceed to Export</span>
+            <span>Proceed to Download</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -216,7 +216,7 @@ export const ComposeScreen: React.FC = () => {
         {/* Left/Center: 9:16 Player + Timeline */}
         <div className="lg:col-span-7 space-y-6">
           {/* Player Stage */}
-          <div className="rounded-2xl border border-stone-200 bg-[#FAF9F6] p-6 flex flex-col items-center">
+          <div className="rounded-2xl border border-stone-200 bg-[var(--color-ivory)] p-6 flex flex-col items-center">
             <div className="w-full max-w-[300px]">
               <AnimatePresence mode="wait">
                 <motion.div
@@ -298,7 +298,7 @@ export const ComposeScreen: React.FC = () => {
                   }
                 }}
                 aria-label="Video timeline scrubber"
-                className="w-full accent-[#B88B58] cursor-pointer"
+                className="w-full accent-[var(--color-peacock)] cursor-pointer"
               />
             </div>
           </div>
@@ -307,7 +307,7 @@ export const ComposeScreen: React.FC = () => {
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-600">
-                Scene Clips Timeline
+                Card Clips Timeline
               </h2>
               <span className="text-xs text-stone-500 tabular-nums">
                 {scenes.length} clips · {totalDuration}s total
@@ -324,12 +324,12 @@ export const ComposeScreen: React.FC = () => {
                     onClick={() => handleSelectClip(seg.index)}
                     className={`min-w-[140px] flex-1 rounded-xl border p-2.5 text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-[#B88B58] bg-[#FAF6EE] ring-2 ring-[#B88B58]/20'
-                        : 'border-stone-200 bg-[#FAF9F6] hover:border-stone-300'
+                        ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] ring-2 ring-[var(--color-peacock)]/20'
+                        : 'border-stone-200 bg-[var(--color-ivory)] hover:border-stone-300'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-[11px] font-semibold text-[#8F6534] tabular-nums">
+                      <span className="text-[11px] font-semibold text-[var(--color-peacock)] tabular-nums">
                         Clip 0{seg.scene.order}
                       </span>
                       <span className="text-[11px] text-stone-500 tabular-nums">
@@ -360,7 +360,7 @@ export const ComposeScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setPlaybackTrigger((t) => t + 1)}
-                className="text-xs font-medium text-[#8F6534] hover:underline cursor-pointer"
+                className="text-xs font-medium text-[var(--color-peacock)] hover:underline cursor-pointer"
               >
                 Replay Text
               </button>
@@ -383,7 +383,7 @@ export const ComposeScreen: React.FC = () => {
                         ),
                       }))
                     }
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)]"
                   />
                 </div>
               ))}
@@ -411,7 +411,7 @@ export const ComposeScreen: React.FC = () => {
                         }}
                         className={`px-2.5 py-2 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
                           active
-                            ? 'border-[#B88B58] bg-[#FAF6EE] text-[#8F6534]'
+                            ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] text-[var(--color-peacock)]'
                             : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300'
                         }`}
                       >
@@ -445,7 +445,7 @@ export const ComposeScreen: React.FC = () => {
                       }));
                       setPlaybackTrigger((t) => t + 1);
                     }}
-                    className="w-full accent-[#B88B58] cursor-pointer"
+                    className="w-full accent-[var(--color-peacock)] cursor-pointer"
                   />
                 </div>
 
@@ -470,7 +470,7 @@ export const ComposeScreen: React.FC = () => {
                         durationSec: Number(e.target.value),
                       }))
                     }
-                    className="w-full accent-[#B88B58] cursor-pointer"
+                    className="w-full accent-[var(--color-peacock)] cursor-pointer"
                   />
                 </div>
               </div>
@@ -479,7 +479,7 @@ export const ComposeScreen: React.FC = () => {
             {/* Scene Transition After Clip */}
             <div className="pt-4 border-t border-stone-100">
               <label className="block text-xs font-medium text-stone-700 mb-2">
-                Scene Transition to Next Clip
+                Transition to Next Card
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {PAGE_TRANSITIONS.map((tr) => {
@@ -497,7 +497,7 @@ export const ComposeScreen: React.FC = () => {
                       }}
                       className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
                         active
-                          ? 'border-[#B88B58] bg-[#FAF6EE] text-[#8F6534]'
+                          ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] text-[var(--color-peacock)]'
                           : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300'
                       }`}
                     >
@@ -513,7 +513,7 @@ export const ComposeScreen: React.FC = () => {
           <div className="rounded-2xl border border-stone-200 bg-white p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#B88B58]" />
+                <Sparkles className="w-4 h-4 text-[var(--color-peacock)]" />
                 <h2 className="font-serif text-lg font-semibold text-stone-900">
                   Falling Effect Overlay
                 </h2>
@@ -528,7 +528,7 @@ export const ComposeScreen: React.FC = () => {
                 }
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
                   activeFallingEnabled
-                    ? 'bg-[#FAF6EE] border-[#B88B58] text-[#8F6534]'
+                    ? 'bg-[var(--color-ivory-soft)] border-[var(--color-peacock)] text-[var(--color-peacock)]'
                     : 'bg-stone-100 border-stone-200 text-stone-600'
                 }`}
               >
@@ -546,7 +546,7 @@ export const ComposeScreen: React.FC = () => {
                     onClick={() => toggleFallingEffect(ef.value)}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
                       selected
-                        ? 'border-[#B88B58] bg-[#FAF6EE] text-[#8F6534]'
+                        ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] text-[var(--color-peacock)]'
                         : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
                     }`}
                   >
@@ -577,7 +577,7 @@ export const ComposeScreen: React.FC = () => {
                       fallingEffectIntensity: Number(e.target.value),
                     })
                   }
-                  className="w-full accent-[#B88B58] cursor-pointer"
+                  className="w-full accent-[var(--color-peacock)] cursor-pointer"
                 />
               </div>
             )}

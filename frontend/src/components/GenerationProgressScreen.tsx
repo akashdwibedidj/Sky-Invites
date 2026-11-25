@@ -8,22 +8,22 @@ import { AgentPipelineNode, Scene } from '../types/invitation';
 const INITIAL_NODES: AgentPipelineNode[] = [
   {
     id: 'scene-splitter',
-    label: 'Scene Splitter',
-    role: 'Narrative Architect',
+    label: 'Planning your cards',
+    role: 'Card Structure',
     status: 'waiting',
     log: 'Queued to structure event chapters...',
   },
   {
     id: 'invitation-designer',
-    label: 'Invitation Designer',
-    role: 'Visual Director',
+    label: 'Designing the look',
+    role: 'Visual Style',
     status: 'waiting',
     log: 'Awaiting chapter breakdown...',
     parallelGroup: true,
   },
   {
     id: 'audience-intent',
-    label: 'Audience-Intent Specialist',
+    label: 'Refining the tone',
     role: 'Tone & Etiquette',
     status: 'waiting',
     log: 'Awaiting chapter breakdown...',
@@ -31,7 +31,7 @@ const INITIAL_NODES: AgentPipelineNode[] = [
   },
   {
     id: 'font-specialist',
-    label: 'Font Specialist',
+    label: 'Placing your text',
     role: 'Typography Pairing',
     status: 'waiting',
     log: 'Awaiting chapter breakdown...',
@@ -39,24 +39,24 @@ const INITIAL_NODES: AgentPipelineNode[] = [
   },
   {
     id: 'prompt-builder',
-    label: 'Prompt Builder',
-    role: '9:16 Safe-Zone Framing',
+    label: 'Framing the layout',
+    role: 'Safe-Zone Framing',
     status: 'waiting',
-    log: 'Preparing portrait art prompts...',
+    log: 'Preparing card artwork descriptions...',
   },
   {
     id: 'image-generator',
-    label: 'Image Generator',
-    role: '9:16 Background Renderer',
+    label: 'Creating the artwork',
+    role: 'Background Artwork',
     status: 'waiting',
-    log: 'Ready to synthesize clean background plates...',
+    log: 'Ready to create clean background artwork...',
   },
 ];
 
 const NodeStatusIcon: React.FC<{ status: AgentPipelineNode['status'] }> = ({ status }) => {
   if (status === 'done') return <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />;
   if (status === 'running')
-    return <Loader2 className="w-4 h-4 text-[#B88B58] animate-spin shrink-0" />;
+    return <Loader2 className="w-4 h-4 text-[var(--color-peacock)] animate-spin shrink-0" />;
   return <CircleDashed className="w-4 h-4 text-stone-300 shrink-0" />;
 };
 
@@ -264,7 +264,7 @@ export const GenerationProgressScreen: React.FC = () => {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-14">
       <div className="text-center max-w-2xl mx-auto mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF6EE] border border-[#E5D5BA] text-xs font-medium text-[#8F6534] mb-3">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--color-ivory-soft)] border border-[var(--color-hairline)] text-xs font-medium text-[var(--color-peacock)] mb-3">
           <Sparkles className="w-3.5 h-3.5" />
           <span>Multi-Agent Invitation Studio</span>
         </div>
@@ -286,7 +286,7 @@ export const GenerationProgressScreen: React.FC = () => {
         </div>
 
         {/* Nodes 2-4: Parallel Specialists */}
-        <div className="rounded-2xl border border-stone-200/80 bg-[#FAF9F6] p-4 sm:p-5">
+        <div className="rounded-2xl border border-stone-200/80 bg-[var(--color-ivory)] p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-stone-700">
               Parallel Specialist Agents
@@ -356,7 +356,7 @@ export const GenerationProgressScreen: React.FC = () => {
                       sc.imageStatus === 'done'
                         ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900'
                         : sc.imageStatus === 'generating'
-                          ? 'border-[#E3D3BA] bg-[#FAF6EE] text-[#8F6534]'
+                          ? 'border-[var(--color-hairline)] bg-[var(--color-ivory-soft)] text-[var(--color-peacock)]'
                           : sc.imageStatus === 'failed'
                             ? 'border-rose-200 bg-rose-50/60 text-rose-900'
                             : 'border-stone-200 bg-stone-50 text-stone-500'
@@ -410,7 +410,7 @@ export const GenerationProgressScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => navigateTo('step-3-review')}
-            className="px-6 py-3 rounded-xl bg-[#B88B58] hover:bg-[#A27644] text-white text-sm font-medium shadow-sm transition-colors cursor-pointer"
+            className="px-6 py-3 rounded-xl bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] text-white text-sm font-medium shadow-sm transition-colors cursor-pointer"
           >
             Continue to Image Review →
           </button>
@@ -428,7 +428,7 @@ const PipelineCard: React.FC<{ node: AgentPipelineNode; compact?: boolean }> = (
     <div
       className={`rounded-2xl border bg-white p-4 transition-colors ${
         node.status === 'running'
-          ? 'border-[#B88B58] shadow-[0_6px_20px_rgba(184,139,88,0.10)]'
+          ? 'border-[var(--color-peacock)] shadow-[0_6px_20px_rgba(184,139,88,0.10)]'
           : node.status === 'done'
             ? 'border-stone-200'
             : 'border-stone-200/70 bg-stone-50/40'

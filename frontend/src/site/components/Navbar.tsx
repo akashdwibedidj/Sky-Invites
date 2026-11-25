@@ -78,7 +78,7 @@ export function Navbar() {
         <div className="flex items-center gap-4 shrink-0">
           {user ? (
             <Link
-              to="/dashboard"
+              to="/editor"
               className="hidden md:inline-flex text-sm font-medium text-peacock/90 hover:text-peacock transition-colors duration-150 whitespace-nowrap shrink-0"
             >
               {COPY.nav.dashboard}
@@ -139,7 +139,7 @@ export function Navbar() {
               {COPY.nav.faq}
             </a>
             {user ? (
-              <Link to="/dashboard" onClick={() => setMobileOpen(false)} className="py-1.5">
+              <Link to="/editor" onClick={() => setMobileOpen(false)} className="py-1.5">
                 {COPY.nav.dashboard}
               </Link>
             ) : (

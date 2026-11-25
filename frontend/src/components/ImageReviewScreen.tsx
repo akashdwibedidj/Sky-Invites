@@ -51,7 +51,7 @@ export const ImageReviewScreen: React.FC = () => {
         <button
           type="button"
           onClick={() => navigateTo('step-2-design')}
-          className="mt-5 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium cursor-pointer"
+          className="mt-5 px-5 py-2.5 rounded-xl bg-[var(--color-peacock)] text-white text-sm font-medium cursor-pointer"
         >
           Go to Design Preferences
         </button>
@@ -149,16 +149,16 @@ export const ImageReviewScreen: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-stone-200/80">
         <div>
-          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[#A27644] mb-1.5">
+          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[var(--color-peacock-deep)] mb-1.5">
             Stage 3 · Separate Layer Editor
           </p>
           <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-stone-900">
             Image & Typography Review
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-stone-600 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#B88B58] shrink-0" />
+            <Layers className="w-4 h-4 text-[var(--color-peacock)] shrink-0" />
             <span>
-              Text layer and image layer are exported separately — font, size, color, and position stay editable without altering the artwork.
+              Text layer and image layer are saved separately — font, size, color, and position stay editable without altering the artwork.
             </span>
           </p>
         </div>
@@ -175,7 +175,7 @@ export const ImageReviewScreen: React.FC = () => {
           <button
             type="button"
             onClick={handleConfirmAll}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl shadow-sm transition-colors cursor-pointer"
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>Confirm All Designs</span>
@@ -190,9 +190,9 @@ export const ImageReviewScreen: React.FC = () => {
         <section className="lg:col-span-3 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Scenes ({scenes.length})
+              Cards ({scenes.length})
             </h2>
-            <span className="text-[11px] text-stone-400">9:16 Portrait</span>
+            <span className="text-[11px] text-stone-400">Vertical</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-3">
@@ -205,7 +205,7 @@ export const ImageReviewScreen: React.FC = () => {
                   onClick={() => setSelectedSceneId(sc.id)}
                   className={`group rounded-2xl border p-2 text-left transition-all cursor-pointer ${
                     isSelected
-                      ? 'border-[#B88B58] bg-[#FAF6EE] ring-2 ring-[#B88B58]/20'
+                      ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] ring-2 ring-[var(--color-peacock)]/20'
                       : 'border-stone-200 bg-white hover:border-stone-300'
                   }`}
                 >
@@ -231,7 +231,7 @@ export const ImageReviewScreen: React.FC = () => {
           <div className="w-full max-w-[330px]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-stone-700">
-                <Move className="w-3.5 h-3.5 text-[#B88B58]" />
+                <Move className="w-3.5 h-3.5 text-[var(--color-peacock)]" />
                 <span>Drag text block on canvas</span>
               </div>
               <button
@@ -266,7 +266,7 @@ export const ImageReviewScreen: React.FC = () => {
 
               {(isRegenerating || isEditingImage) && (
                 <div className="absolute inset-0 z-40 rounded-[26px] bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center text-center p-6">
-                  <Loader2 className="w-7 h-7 text-[#B88B58] animate-spin mb-2" />
+                  <Loader2 className="w-7 h-7 text-[var(--color-peacock)] animate-spin mb-2" />
                   <p className="text-sm font-medium text-stone-900">
                     {isRegenerating
                       ? 'Regenerating background plate...'
@@ -294,12 +294,12 @@ export const ImageReviewScreen: React.FC = () => {
           <div className="rounded-2xl border border-stone-200 bg-white p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h2 className="font-serif text-lg font-semibold text-stone-900">
-                Text Layer — Scene {activeScene.order}
+                Text Layer — Card {activeScene.order}
               </h2>
               <button
                 type="button"
                 onClick={handleAddLine}
-                className="inline-flex items-center gap-1 text-xs font-medium text-[#8F6534] hover:text-[#704C22] cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-peacock)] hover:text-[#704C22] cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Line</span>
@@ -318,7 +318,7 @@ export const ImageReviewScreen: React.FC = () => {
                     value={line.text}
                     onChange={(e) => handleUpdateLine(line.id, e.target.value)}
                     onBlur={() => patchScene(activeScene, { text_layer: activeScene.textLayer }).catch(console.error)}
-                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)]"
                   />
                   {activeScene.textLayer.lines.length > 1 && (
                     <button
@@ -402,7 +402,7 @@ export const ImageReviewScreen: React.FC = () => {
                       fontSize: Number(e.target.value),
                     }))
                   }
-                  className="w-full accent-[#B88B58] cursor-pointer"
+                  className="w-full accent-[var(--color-peacock)] cursor-pointer"
                 />
               </div>
 
@@ -422,7 +422,7 @@ export const ImageReviewScreen: React.FC = () => {
                       aria-label={`Color ${hex}`}
                       className={`w-6 h-6 rounded-full border cursor-pointer ${
                         activeScene.textLayer.color.toUpperCase() === hex.toUpperCase()
-                          ? 'ring-2 ring-[#B88B58] ring-offset-1 border-stone-400'
+                          ? 'ring-2 ring-[var(--color-peacock)] ring-offset-1 border-stone-400'
                           : 'border-stone-300'
                       }`}
                     />
@@ -510,7 +510,7 @@ export const ImageReviewScreen: React.FC = () => {
 
             <div>
               <label className="block text-xs font-medium text-stone-700 mb-1.5">
-                Editable Image Prompt
+                Artwork Description
               </label>
               <textarea
                 rows={3}
@@ -524,7 +524,7 @@ export const ImageReviewScreen: React.FC = () => {
                 onBlur={(e) =>
                   patchScene(activeScene, { image_prompt: e.target.value }).catch(console.error)
                 }
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-[#FAF9F6] text-stone-800 focus:outline-none focus:border-[#B88B58]"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-[var(--color-ivory)] text-stone-800 focus:outline-none focus:border-[var(--color-peacock)]"
               />
             </div>
 
@@ -533,7 +533,7 @@ export const ImageReviewScreen: React.FC = () => {
                 type="button"
                 disabled={regenLimitReached || isImageBusy}
                 onClick={handleRegenerate}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-stone-800 bg-[#FAF6EE] hover:bg-[#F2E9D7] border border-[#E3D3BA] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-stone-800 bg-[var(--color-ivory-soft)] hover:bg-[#F2E9D7] border border-[var(--color-hairline)] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
                 <span>{regenLimitReached ? 'Regeneration used' : 'Regenerate image'}</span>
@@ -569,7 +569,7 @@ export const ImageReviewScreen: React.FC = () => {
                       ? 'Regeneration used for this card'
                       : 'e.g., Add warmer candlelight or softer floral framing'
                   }
-                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58] disabled:bg-stone-50 disabled:text-stone-400"
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)] disabled:bg-stone-50 disabled:text-stone-400"
                 />
                 <button
                   type="submit"

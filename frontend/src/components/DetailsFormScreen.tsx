@@ -14,7 +14,7 @@ export const DetailsFormScreen: React.FC = () => {
         <button
           type="button"
           onClick={() => navigateTo('dashboard')}
-          className="mt-4 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium cursor-pointer"
+          className="mt-4 px-5 py-2.5 rounded-xl bg-[var(--color-peacock)] text-white text-sm font-medium cursor-pointer"
         >
           Return to Dashboard
         </button>
@@ -78,7 +78,7 @@ export const DetailsFormScreen: React.FC = () => {
     <main className="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-12">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[#A27644] mb-2">
+          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[var(--color-peacock-deep)] mb-2">
             Stage 1 · {type} Details
           </p>
           <h1 className="font-serif text-3xl font-semibold text-stone-900 tracking-tight">
@@ -119,7 +119,7 @@ export const DetailsFormScreen: React.FC = () => {
                   value={details.groomName}
                   onChange={(e) => updateActiveDetails({ groomName: e.target.value })}
                   placeholder="e.g., Aarav Singhania"
-                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
                 />
               </div>
 
@@ -132,7 +132,7 @@ export const DetailsFormScreen: React.FC = () => {
                   value={details.brideName}
                   onChange={(e) => updateActiveDetails({ brideName: e.target.value })}
                   placeholder="e.g., Meera Kapoor"
-                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
                 />
               </div>
 
@@ -145,7 +145,7 @@ export const DetailsFormScreen: React.FC = () => {
                   value={details.groomParents}
                   onChange={(e) => updateActiveDetails({ groomParents: e.target.value })}
                   placeholder="e.g., Mrs. Kavita & Mr. Rajesh Singhania"
-                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
                 />
               </div>
 
@@ -158,7 +158,7 @@ export const DetailsFormScreen: React.FC = () => {
                   value={details.brideParents}
                   onChange={(e) => updateActiveDetails({ brideParents: e.target.value })}
                   placeholder="e.g., Mrs. Sunita & Mr. Vikram Kapoor"
-                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
                 />
               </div>
             </div>
@@ -179,7 +179,7 @@ export const DetailsFormScreen: React.FC = () => {
                         ? 'e.g., Maya & Arjun'
                         : 'e.g., Atelier Winter Gala'
                   }
-                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
                 />
               </div>
 
@@ -192,7 +192,7 @@ export const DetailsFormScreen: React.FC = () => {
                   value={details.hostName}
                   onChange={(e) => updateActiveDetails({ hostName: e.target.value })}
                   placeholder="e.g., The Mehta Family"
-                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
                 />
               </div>
             </div>
@@ -204,7 +204,7 @@ export const DetailsFormScreen: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div>
               <h2 className="font-serif text-xl font-semibold text-stone-900 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-[#B88B58]" />
+                <Calendar className="w-4 h-4 text-[var(--color-peacock)]" />
                 <span>Events & Dates</span>
               </h2>
               <p className="text-xs text-stone-500 mt-1">
@@ -214,7 +214,7 @@ export const DetailsFormScreen: React.FC = () => {
             <button
               type="button"
               onClick={handleAddEvent}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-[#8F6534] bg-[#FAF6EE] hover:bg-[#F3EBD9] border border-[#E5D5BA] rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-[var(--color-peacock)] bg-[var(--color-ivory-soft)] hover:bg-[#F3EBD9] border border-[var(--color-hairline)] rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Event Row</span>
@@ -237,7 +237,7 @@ export const DetailsFormScreen: React.FC = () => {
               {details.events.map((ev, index) => (
                 <div
                   key={ev.id}
-                  className="rounded-xl border border-stone-200/90 bg-[#FAF9F6] p-4 space-y-3"
+                  className="rounded-xl border border-stone-200/90 bg-[var(--color-ivory)] p-4 space-y-3"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-stone-500 tabular-nums">
@@ -264,7 +264,7 @@ export const DetailsFormScreen: React.FC = () => {
                         value={ev.name}
                         onChange={(e) => handleUpdateEvent(ev.id, { name: e.target.value })}
                         placeholder="e.g., Sangeet Under the Stars"
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)]"
                       />
                     </div>
                     <div className="sm:col-span-4">
@@ -275,7 +275,7 @@ export const DetailsFormScreen: React.FC = () => {
                         type="date"
                         value={ev.date}
                         onChange={(e) => handleUpdateEvent(ev.id, { date: e.target.value })}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 tabular-nums focus:outline-none focus:border-[#B88B58]"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 tabular-nums focus:outline-none focus:border-[var(--color-peacock)]"
                       />
                     </div>
                     <div className="sm:col-span-3">
@@ -287,7 +287,7 @@ export const DetailsFormScreen: React.FC = () => {
                         value={ev.time}
                         onChange={(e) => handleUpdateEvent(ev.id, { time: e.target.value })}
                         placeholder="07:30 PM"
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 tabular-nums focus:outline-none focus:border-[#B88B58]"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 tabular-nums focus:outline-none focus:border-[var(--color-peacock)]"
                       />
                     </div>
                   </div>
@@ -301,7 +301,7 @@ export const DetailsFormScreen: React.FC = () => {
                       value={ev.venue}
                       onChange={(e) => handleUpdateEvent(ev.id, { venue: e.target.value })}
                       placeholder="e.g., Jagmandir Island Palace, Udaipur"
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)]"
                     />
                   </div>
                 </div>
@@ -320,7 +320,7 @@ export const DetailsFormScreen: React.FC = () => {
               Invitation Message & Notes
             </label>
             <p className="text-xs text-stone-500 mb-3">
-              Share your heartfelt greeting, dress code notes, or visual inspiration for our AI writer.
+              Share your heartfelt greeting, dress code notes, or visual inspiration for your invitation.
             </p>
             <textarea
               id="invitation-message"
@@ -328,7 +328,7 @@ export const DetailsFormScreen: React.FC = () => {
               value={details.message}
               onChange={(e) => updateActiveDetails({ message: e.target.value })}
               placeholder="With the blessings of our elders, we joyfully invite you to share in our celebrations..."
-              className="w-full px-3.5 py-3 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+              className="w-full px-3.5 py-3 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
             />
           </div>
 
@@ -336,11 +336,11 @@ export const DetailsFormScreen: React.FC = () => {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-                  <ImagePlus className="w-4 h-4 text-[#B88B58]" />
+                  <ImagePlus className="w-4 h-4 text-[var(--color-peacock)]" />
                   <span>Reference or Physical Invitation Photo(s)</span>
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Upload printed stationery, moodboard cards, or venue photos to inspire the artwork.
+                  Upload printed cards, moodboard images, or venue photos to inspire the artwork.
                 </p>
               </div>
             </div>
@@ -366,9 +366,9 @@ export const DetailsFormScreen: React.FC = () => {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
               }}
-              className="mt-2 rounded-xl border border-dashed border-stone-300 bg-[#FAF9F6] hover:bg-[#FAF6EE] hover:border-[#B88B58] transition-colors py-7 px-4 text-center cursor-pointer"
+              className="mt-2 rounded-xl border border-dashed border-stone-300 bg-[var(--color-ivory)] hover:bg-[var(--color-ivory-soft)] hover:border-[var(--color-peacock)] transition-colors py-7 px-4 text-center cursor-pointer"
             >
-              <Upload className="w-5 h-5 text-[#B88B58] mx-auto mb-2" />
+              <Upload className="w-5 h-5 text-[var(--color-peacock)] mx-auto mb-2" />
               <p className="text-sm font-medium text-stone-800">
                 Click to upload or drag & drop reference images
               </p>
@@ -417,7 +417,7 @@ export const DetailsFormScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => navigateTo('step-2-design')}
-            className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl shadow-sm transition-colors cursor-pointer"
           >
             <span>Continue to Design Preferences</span>
             <ArrowRight className="w-4 h-4" />

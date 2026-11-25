@@ -49,11 +49,11 @@ export const ExportScreen: React.FC = () => {
   if (!activeInvitation || scenes.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-16 text-center">
-        <p className="text-stone-600">No invitation scenes ready for export.</p>
+        <p className="text-stone-600">No invitation cards ready for download.</p>
         <button
           type="button"
           onClick={() => navigateTo('dashboard')}
-          className="mt-4 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium cursor-pointer"
+          className="mt-4 px-5 py-2.5 rounded-xl bg-[var(--color-peacock)] text-white text-sm font-medium cursor-pointer"
         >
           Return to Dashboard
         </button>
@@ -115,17 +115,17 @@ export const ExportScreen: React.FC = () => {
     <main className="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-stone-200/80">
         <div>
-          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[#A27644] mb-1.5">
-            Stage 6 · Render & Delivery
+          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[var(--color-peacock-deep)] mb-1.5">
+            Stage 6 · Video &amp; Delivery
           </p>
           <h1 className="font-serif text-3xl font-semibold text-stone-900">
-            Export Invitation Video
+            Download Invitation Video
           </h1>
         </div>
 
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-stone-100 border border-stone-200 text-xs font-semibold text-stone-800 tabular-nums self-start sm:self-auto">
-          <Film className="w-3.5 h-3.5 text-[#B88B58]" />
-          <span>1080×1920 MP4</span>
+          <Film className="w-3.5 h-3.5 text-[var(--color-peacock)]" />
+          <span>MP4 Video</span>
         </div>
       </div>
 
@@ -164,7 +164,7 @@ export const ExportScreen: React.FC = () => {
                 )}
               </button>
               <span className="text-xs text-stone-500 tabular-nums">
-                Scene {activeSceneIdx + 1} of {scenes.length}
+                Card {activeSceneIdx + 1} of {scenes.length}
               </span>
             </div>
           )}
@@ -178,13 +178,12 @@ export const ExportScreen: React.FC = () => {
                 <h2 className="font-serif text-2xl font-semibold text-stone-900">
                   {activeInvitation.title}
                 </h2>
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#FAF6EE] border border-[#E5D5BA] text-[#8F6534]">
-                  1080×1920 MP4
+                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-ivory-soft)] border border-[var(--color-hairline)] text-[var(--color-peacock)]">
+                  MP4 Video
                 </span>
               </div>
               <p className="text-sm text-stone-600 leading-relaxed">
-                {scenes.length} portrait scenes · {activeInvitation.design.theme} style ·{' '}
-                {activeInvitation.design.musicMood}
+                {scenes.length} cards · {activeInvitation.design.theme} style
               </p>
             </div>
 
@@ -194,10 +193,10 @@ export const ExportScreen: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleExport}
-                  className="w-full inline-flex items-center justify-center gap-2.5 px-6 py-4 rounded-xl bg-[#B88B58] hover:bg-[#A27644] text-white text-sm font-medium shadow-sm transition-colors cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-2.5 px-6 py-4 rounded-xl bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] text-white text-sm font-medium shadow-sm transition-colors cursor-pointer"
                 >
                   <Film className="w-4 h-4" />
-                  <span>Export video (1080×1920 MP4)</span>
+                  <span>Prepare &amp; Download Video</span>
                 </button>
                 <button
                   type="button"
@@ -214,7 +213,7 @@ export const ExportScreen: React.FC = () => {
               <div className="space-y-3 py-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-stone-800 flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 text-[#B88B58] animate-spin" />
+                    <Loader2 className="w-4 h-4 text-[var(--color-peacock)] animate-spin" />
                     <span>{exportStage || 'Compositing layers...'}</span>
                   </span>
                   <span className="font-semibold text-stone-900 tabular-nums">
@@ -224,7 +223,7 @@ export const ExportScreen: React.FC = () => {
                 <div className="h-2.5 w-full rounded-full bg-stone-100 overflow-hidden">
                   <div
                     style={{ width: `${exportProgress}%` }}
-                    className="h-full bg-[#B88B58] transition-all duration-300"
+                    className="h-full bg-[var(--color-peacock)] transition-all duration-300"
                   />
                 </div>
               </div>
@@ -249,7 +248,7 @@ export const ExportScreen: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleDownload}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#B88B58] hover:bg-[#A27644] text-white text-sm font-medium shadow-sm transition-colors cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] text-white text-sm font-medium shadow-sm transition-colors cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download</span>
@@ -324,7 +323,7 @@ export const ExportScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCopyShareLink}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#B88B58] hover:bg-[#A27644] text-white text-xs font-medium cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] text-white text-xs font-medium cursor-pointer"
               >
                 {copiedLink ? (
                   <>
