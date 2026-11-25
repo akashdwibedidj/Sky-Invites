@@ -1,16 +1,16 @@
 import React from 'react';
-import type { InvitationExample } from '../types';
-import { InvitationArtwork } from './InvitationArtwork';
+import type { SampleExample } from '../content/examples';
+import { SampleCard } from './SampleCard';
 
 interface PhoneMockupProps {
-  invitation: InvitationExample;
-  onPlay?: (invitation: InvitationExample) => void;
+  sample: SampleExample;
+  onPlay?: (sample: SampleExample) => void;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
 export function PhoneMockup({
-  invitation,
+  sample,
   onPlay,
   size = 'md',
   className = '',
@@ -20,7 +20,7 @@ export function PhoneMockup({
       className={`relative rounded-[1.75rem] bg-peacock-deep p-[7px] shadow-[var(--shadow-paper)] ring-1 ring-gold/30 ${className}`}
     >
       <div className="overflow-hidden rounded-[1.35rem]">
-        <InvitationArtwork invitation={invitation} onPlay={onPlay} size={size} />
+        <SampleCard sample={sample} onSelect={onPlay} size={size} className="w-full" />
       </div>
     </div>
   );

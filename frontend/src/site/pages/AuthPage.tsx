@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { COPY } from '../content/copy';
-import { HERO_INVITATIONS } from '../mock/data';
+import { SAMPLE_EXAMPLES } from '../content/examples';
 import type { AccountType } from '../types';
-import { InvitationArtwork } from '../components/InvitationArtwork';
+import { SampleCard } from '../components/SampleCard';
 
 interface AuthPageProps {
   mode: 'login' | 'signup';
@@ -237,7 +237,11 @@ export function AuthPage({ mode }: AuthPageProps) {
         </div>
 
         <div className="flex flex-col items-center justify-center bg-peacock p-8 text-center text-ivory sm:p-12 lg:col-span-6">
-          <InvitationArtwork invitation={HERO_INVITATIONS[1]} size="md" />
+          {SAMPLE_EXAMPLES.length > 0 ? (
+            <SampleCard sample={SAMPLE_EXAMPLES[1] ?? SAMPLE_EXAMPLES[0]} size="md" />
+          ) : (
+            <div className="aspect-[9/16] w-56 rounded-2xl border border-ivory/20 bg-peacock-deep/40 sm:w-64" />
+          )}
           <p className="mt-6 max-w-xs font-site-serif text-xl italic text-ivory/90">
             {COPY.auth.sideQuote}
           </p>

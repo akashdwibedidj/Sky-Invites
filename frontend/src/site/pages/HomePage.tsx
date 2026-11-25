@@ -12,18 +12,17 @@ import {
 import {
   CATEGORIES,
   CATEGORY_LIST,
-  EXAMPLE_INVITATIONS,
   FAQ_ITEMS,
   FEATURES,
-  HERO_INVITATIONS,
   HOW_IT_WORKS_STEPS,
   PRICING_TIERS,
   WAITLIST_INITIAL_COUNT,
 } from '../mock/data';
 import { COPY } from '../content/copy';
+import { SAMPLE_EXAMPLES, type SampleExample } from '../content/examples';
 import * as api from '../services/siteApi';
-import type { InvitationCategory, InvitationExample } from '../types';
-import { InvitationArtwork } from '../components/InvitationArtwork';
+import type { InvitationCategory } from '../types';
+import { SampleCard } from '../components/SampleCard';
 import { BotanicalDivider, OccasionMotif } from '../components/Ornaments';
 import { ExamplePreviewModal } from '../components/ExamplePreviewModal';
 import { FlowingPeacock } from '../components/FlowingPeacock';
@@ -48,7 +47,7 @@ const HERO_DECOR_POSITIONS = {
 
 export function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<'All' | InvitationCategory>('All');
-  const [activePreview, setActivePreview] = useState<InvitationExample | null>(null);
+  const [activePreview, setActivePreview] = useState<SampleExample | null>(null);
   const [openFaqId, setOpenFaqId] = useState<string>(FAQ_ITEMS[0].id);
 
   // Waitlist form state
@@ -64,9 +63,21 @@ export function HomePage() {
   const galleryScrollRef = useRef<HTMLDivElement>(null);
   const waitlistRef = useRef<HTMLElement>(null);
 
+  const availableCategories = useMemo(() => {
+    const seen = new Set<InvitationCategory>();
+    const list: InvitationCategory[] = [];
+    for (const item of SAMPLE_EXAMPLES) {
+      if (!seen.has(item.category)) {
+        seen.add(item.category);
+        list.push(item.category);
+      }
+    }
+    return list;
+  }, []);
+
   const filteredExamples = useMemo(() => {
-    if (selectedCategory === 'All') return EXAMPLE_INVITATIONS;
-    return EXAMPLE_INVITATIONS.filter((item) => item.category === selectedCategory);
+    if (selectedCategory === 'All') return SAMPLE_EXAMPLES;
+    return SAMPLE_EXAMPLES.filter((item) => item.category === selectedCategory);
   }, [selectedCategory]);
 
   const scrollToWaitlist = () => {
@@ -168,28 +179,34 @@ export function HomePage() {
 
         {/* Horizontal Invitation Strip */}
         <div className="relative z-20 mx-auto mt-6 max-w-7xl px-4 sm:-mt-8 sm:px-6 lg:-mt-12 lg:px-8">
-          <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory no-scrollbar lg:justify-center">
-            {HERO_INVITATIONS.map((item) => (
-              <div
-                key={item.id}
-                className="flex shrink-0 snap-start flex-col items-center"
-              >
-                <InvitationArtwork
-                  invitation={item}
-                  size="sm"
-                  onPlay={setActivePreview}
-                />
-                <div className="mt-3 rounded-full bg-ivory/78 px-4 py-1.5 text-center backdrop-blur-sm">
-                  <p className="font-site-serif text-sm font-semibold text-peacock">
-                    {item.title}
-                  </p>
-                  <p className="text-[11px] text-ink-muted">
-                    {item.category} · {item.moodWord}
-                  </p>
+          {SAMPLE_EXAMPLES.length === 0 ? (
+            <div className="flex justify-center pb-4">
+              <div className="aspect-[9/16] w-44 rounded-2xl border border-hairline bg-ivory-card shadow-[var(--shadow-paper)] sm:w-48" />
+            </div>
+          ) : (
+            <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory no-scrollbar lg:justify-center">
+              {SAMPLE_EXAMPLES.slice(0, 5).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex shrink-0 snap-start flex-col items-center"
+                >
+                  <SampleCard
+                    sample={item}
+                    size="sm"
+                    onSelect={setActivePreview}
+                  />
+                  <div className="mt-3 rounded-full bg-ivory/78 px-4 py-1.5 text-center backdrop-blur-sm">
+                    <p className="font-site-serif text-sm font-semibold text-peacock">
+                      {item.title}
+                    </p>
+                    <p className="text-[11px] text-ink-muted">
+                      {item.category}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -335,57 +352,63 @@ export function HomePage() {
             </div>
           </div>
 
-          <div
-            role="tablist"
-            aria-label="Filter invitation examples by occasion"
-            className="mt-8 flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar"
-          >
-            {([COPY.home.examples.allFilter, ...CATEGORY_LIST] as const).map((cat) => {
-              const active = selectedCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock ${
-                    active
-                      ? 'bg-peacock text-ivory'
-                      : 'border border-hairline bg-ivory-card text-ink-muted hover:text-peacock'
-                  }`}
+          {SAMPLE_EXAMPLES.length > 0 && (
+            <>
+              {availableCategories.length > 1 && (
+                <div
+                  role="tablist"
+                  aria-label="Filter invitation examples by occasion"
+                  className="mt-8 flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar"
                 >
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            ref={galleryScrollRef}
-            className="mt-8 flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory no-scrollbar"
-          >
-            {filteredExamples.map((example) => (
-              <div
-                key={example.id}
-                className="flex shrink-0 snap-start flex-col items-center"
-              >
-                <InvitationArtwork
-                  invitation={example}
-                  size="lg"
-                  onPlay={setActivePreview}
-                />
-                <div className="mt-4 w-60 text-center">
-                  <h3 className="font-site-serif text-lg font-semibold text-peacock truncate">
-                    {example.title}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-ink-muted">
-                    {example.category} · {example.moodWord}
-                  </p>
+                  {([COPY.home.examples.allFilter, ...availableCategories] as const).map((cat) => {
+                    const active = selectedCategory === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock ${
+                          active
+                            ? 'bg-peacock text-ivory'
+                            : 'border border-hairline bg-ivory-card text-ink-muted hover:text-peacock'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
                 </div>
+              )}
+
+              <div
+                ref={galleryScrollRef}
+                className="mt-8 flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory no-scrollbar"
+              >
+                {filteredExamples.map((example) => (
+                  <div
+                    key={example.id}
+                    className="flex shrink-0 snap-start flex-col items-center"
+                  >
+                    <SampleCard
+                      sample={example}
+                      size="lg"
+                      onSelect={setActivePreview}
+                    />
+                    <div className="mt-4 w-60 text-center">
+                      <h3 className="font-site-serif text-lg font-semibold text-peacock truncate">
+                        {example.title}
+                      </h3>
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        {example.category}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -636,7 +659,7 @@ export function HomePage() {
       </section>
 
       <ExamplePreviewModal
-        invitation={activePreview}
+        sample={activePreview}
         onClose={() => setActivePreview(null)}
       />
     </div>

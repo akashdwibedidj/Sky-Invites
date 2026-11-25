@@ -1,46 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { ArrowRight, Volume2, VolumeX, X } from 'lucide-react';
 import { COPY } from '../content/copy';
-import type { InvitationExample } from '../types';
-import { InvitationArtwork } from './InvitationArtwork';
+import type { SampleExample } from '../content/examples';
 
 interface ExamplePreviewModalProps {
-  invitation: InvitationExample | null;
+  sample: SampleExample | null;
   onClose: () => void;
 }
 
-export function ExamplePreviewModal({ invitation, onClose }: ExamplePreviewModalProps) {
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [stepIndex, setStepIndex] = useState(0);
-  const steps = COPY.previewModal.steps;
+export function ExamplePreviewModal({ sample, onClose }: ExamplePreviewModalProps) {
+  const [isMuted, setIsMuted] = useState(true);
 
   useEffect(() => {
-    setStepIndex(0);
-    setIsPlaying(true);
-  }, [invitation?.id]);
+    setIsMuted(true);
+  }, [sample?.id]);
 
   useEffect(() => {
-    if (!invitation || !isPlaying) return;
-    const timer = window.setInterval(() => {
-      setStepIndex((prev) => (prev + 1) % steps.length);
-    }, 2600);
-    return () => window.clearInterval(timer);
-  }, [invitation, isPlaying, steps.length]);
-
-  useEffect(() => {
-    if (!invitation) return;
+    if (!sample) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [invitation, onClose]);
+  }, [sample, onClose]);
 
   return (
     <AnimatePresence>
-      {invitation && (
+      {sample && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -70,91 +58,58 @@ export function ExamplePreviewModal({ invitation, onClose }: ExamplePreviewModal
             </button>
 
             <div className="flex flex-col items-center justify-center bg-ivory-soft p-6 sm:p-8 md:w-1/2">
-              <motion.div
-                animate={
-                  isPlaying
-                    ? { scale: [1, 1.02, 1], y: [0, -3, 0] }
-                    : { scale: 1, y: 0 }
-                }
-                transition={{
-                  duration: 5.2,
-                  repeat: isPlaying ? Infinity : 0,
-                  ease: 'easeInOut',
-                }}
-              >
-                <InvitationArtwork invitation={invitation} size="sm" />
-              </motion.div>
-
-              <div className="mt-4 flex w-48 gap-1.5">
-                {steps.map((step, idx) => (
-                  <div
-                    key={step}
-                    className="h-0.5 flex-1 overflow-hidden rounded-full bg-peacock/15"
-                  >
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        idx === stepIndex
-                          ? 'w-full bg-peacock'
-                          : idx < stepIndex
-                            ? 'w-full bg-gold-warm'
-                            : 'w-0'
-                      }`}
+              <div className="relative aspect-[9/16] w-52 overflow-hidden rounded-2xl border border-hairline bg-ivory-card shadow-[var(--shadow-paper)] sm:w-56">
+                {sample.videoFile ? (
+                  <>
+                    <video
+                      key={sample.videoFile}
+                      src={sample.videoFile}
+                      poster={sample.posterImage}
+                      controls
+                      autoPlay
+                      loop
+                      playsInline
+                      muted={isMuted}
+                      className="h-full w-full object-cover"
                     />
-                  </div>
-                ))}
+                    <button
+                      type="button"
+                      onClick={() => setIsMuted((prev) => !prev)}
+                      aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+                      className="absolute top-3 right-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-peacock-deep/80 text-ivory transition-colors hover:bg-peacock-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ivory"
+                    >
+                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </button>
+                  </>
+                ) : (
+                  <img
+                    src={sample.posterImage}
+                    alt={sample.title}
+                    className="h-full w-full object-cover"
+                  />
+                )}
               </div>
             </div>
 
             <div className="flex flex-col justify-between p-6 sm:p-8 md:w-1/2">
               <div>
-                <p className="text-xs font-medium text-gold-dark">
-                  {invitation.category} · {invitation.moodWord}
-                </p>
+                <p className="text-xs font-medium text-gold-dark">{sample.category}</p>
                 <h3
                   id="preview-modal-title"
                   className="mt-2 font-site-serif text-3xl font-semibold text-peacock"
                 >
-                  {invitation.title}
+                  {sample.title}
                 </h3>
-                <p className="mt-2 text-sm text-ink-muted">
-                  {invitation.dateText} · {invitation.venueText}
+                <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+                  {sample.caption}
                 </p>
-
-                <div className="mt-6 space-y-2 border-t border-hairline pt-4 text-sm">
-                  <p className="font-medium text-peacock">{steps[stepIndex]}</p>
-                  <p className="text-xs leading-relaxed text-ink-muted">
-                    {COPY.previewModal.note}
-                  </p>
-                </div>
-
-                <div className="mt-5 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsPlaying((p) => !p)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-ivory-soft px-3.5 py-2 text-xs font-medium text-peacock transition-colors hover:bg-ivory-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock"
-                  >
-                    {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                    {isPlaying ? COPY.previewModal.pause : COPY.previewModal.play}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStepIndex(0);
-                      setIsPlaying(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-ivory-soft px-3.5 py-2 text-xs font-medium text-peacock transition-colors hover:bg-ivory-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    {COPY.previewModal.restart}
-                  </button>
-                </div>
               </div>
 
               <div className="mt-8 border-t border-hairline pt-5">
                 <Link
-                  to="/editor/create"
+                  to="/signup"
                   onClick={onClose}
-                  className="btn-glass-peacock inline-flex w-full items-center justify-center gap-2 px-5 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-peacock px-5 py-3 text-sm font-medium text-ivory transition-colors hover:bg-peacock-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock"
                 >
                   {COPY.previewModal.cta}
                   <ArrowRight className="h-4 w-4" />
