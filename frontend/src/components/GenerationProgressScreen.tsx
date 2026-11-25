@@ -114,6 +114,15 @@ export const GenerationProgressScreen: React.FC = () => {
     if (!activeInvitation || hasStartedRef.current) return;
     hasStartedRef.current = true;
 
+    // Never re-generate if all scenes already have images
+    const allImagesReady =
+      activeInvitation.scenes.length > 0 &&
+      activeInvitation.scenes.every((s) => s.imageStatus === 'done' && Boolean(s.imageUrl));
+    if (allImagesReady) {
+      navigateTo('step-3-review');
+      return;
+    }
+
     const runPipeline = async () => {
       try {
         updateActiveStatus('Generating');

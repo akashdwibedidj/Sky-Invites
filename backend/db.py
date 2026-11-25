@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -54,6 +56,9 @@ class Scene(Base):
     animation_plan = Column(JSONB, nullable=True)
     video_path = Column(String(512), nullable=True)
     status = Column(String(50), nullable=True, default="pending")
+    image_generations = Column(Integer, nullable=False, server_default="0", default=0)
+    video_generations = Column(Integer, nullable=False, server_default="0", default=0)
+    analyzed = Column(Boolean, nullable=False, server_default="false", default=False)
 
     __table_args__ = (
         UniqueConstraint("invitation_id", "scene_index", name="uq_invitation_scene_index"),
@@ -92,3 +97,19 @@ def get_session():
 def create_tables() -> None:
     eng = _get_engine()
     Base.metadata.create_all(bind=eng)
+    # Idempotent migration for existing scenes tables
+    with eng.begin() as conn:
+        conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS image_generations INTEGER NOT NULL DEFAULT 0"))
+        conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS video_generations INTEGER NOT NULL DEFAULT 0"))
+        conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS analyzed BOOLEAN NOT NULL DEFAULT FALSE"))
+        # Backfill counters for already-generated media
+        conn.execute(text("UPDATE scenes SET image_generations = 1 WHERE image_path IS NOT NULL AND image_generations = 0"))
+        conn.execute(text("UPDATE scenes SET video_generations = 1 WHERE video_path IS NOT NULL AND video_generations = 0"))
+        conn.execute(text(
+            "UPDATE scenes SET analyzed = TRUE "
+            "WHERE animation_plan IS NOT NULL "
+            "AND (animation_plan->'objectsDetected') IS NOT NULL "
+            "AND jsonb_typeof(animation_plan->'objectsDetected') = 'array' "
+            "AND jsonb_array_length(animation_plan->'objectsDetected') > 0 "
+            "AND analyzed = FALSE"
+        ))

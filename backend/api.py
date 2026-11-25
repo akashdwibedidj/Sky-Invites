@@ -16,6 +16,7 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -29,12 +30,21 @@ if str(BACKEND_DIR) not in sys.path:
 load_dotenv(BACKEND_DIR / ".env", override=True)
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
-from config import normalize_category
+from config import (
+    MAX_IMAGE_GENERATIONS_PER_SCENE,
+    MAX_VIDEO_GENERATIONS_PER_SCENE,
+    normalize_category,
+)
 from storage import (
     create_invitation,
     load_state,
     save_state,
     update_scene,
+    try_claim_initial_image_generation,
+    try_claim_image_regeneration,
+    release_image_generation,
+    try_claim_video_generation,
+    release_video_generation,
     image_path as get_image_path,
     video_path as get_video_path,
     rel,
@@ -239,6 +249,11 @@ def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_inp
         "textLayer": text_layer,
         "animationPlan": animation_plan,
         "videoUrl": f"/media/{invitation_id}/scene_{idx}.mp4" if has_video else None,
+        "analyzed": bool(scene.get("analyzed", False)),
+        "imageGenerations": int(scene.get("image_generations", 0)),
+        "videoGenerations": int(scene.get("video_generations", 0)),
+        "maxImageGenerations": MAX_IMAGE_GENERATIONS_PER_SCENE,
+        "maxVideoGenerations": MAX_VIDEO_GENERATIONS_PER_SCENE,
     }
 
 
@@ -342,12 +357,12 @@ def _generate_and_layout_single_scene(
         return idx, True, _file_to_b64(out)
     except Exception as err:
         logger.error(f"[{invitation_id}] Scene {idx} image generation failed: {err}")
-        update_scene(invitation_id, idx, status="failed")
+        release_image_generation(invitation_id, idx, restore_status="failed")
         return idx, False, None
 
 
 def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
-    """Stage 2: generate_images -> layout_text for each scene."""
+    """Stage 2: generate_images -> layout_text for scenes that do not yet have an image."""
     try:
         logger.info(f"[{invitation_id}] Starting Stage 2: generate_images (story_driven={story_driven})")
         st = load_state(invitation_id)
@@ -358,13 +373,18 @@ def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
         inv_input = st["input"]
         bible = st["style_bible"]
 
-        # Mark all scenes as generating
+        # Only generate images for scenes without an image yet (atomically claimed)
+        scenes_to_generate = []
         for s in scenes:
-            update_scene(invitation_id, s["scene_index"], status="generating")
+            if s.get("image_path"):
+                continue
+            claimed, _, _, _ = try_claim_initial_image_generation(invitation_id, s["scene_index"])
+            if claimed:
+                scenes_to_generate.append(s)
 
         if story_driven:
             prev_b64: Optional[str] = None
-            for sc in scenes:
+            for sc in scenes_to_generate:
                 _, success, next_b64 = _generate_and_layout_single_scene(
                     invitation_id, sc, inv_input, bible, prev_b64
                 )
@@ -381,7 +401,7 @@ def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
                         bible,
                         None,
                     )
-                    for sc in scenes
+                    for sc in scenes_to_generate
                 ]
                 for f in concurrent.futures.as_completed(futures):
                     f.result()
@@ -403,9 +423,8 @@ def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
 
 
 def run_regenerate_image_task(invitation_id: str, scene_index: int, prompt: Optional[str]) -> None:
-    """Regenerates a single scene's background image and updates text layout."""
+    """Regenerates a single scene's background image and updates text layout. Resets analyzed flag."""
     try:
-        update_scene(invitation_id, scene_index, status="generating")
         node_regenerate_image(invitation_id, scene_index, prompt)
 
         # Refresh text layout with new image
@@ -418,10 +437,17 @@ def run_regenerate_image_task(invitation_id: str, scene_index: int, prompt: Opti
             "_current_scene": scene,
         })
         text_layer = layout_res["_layout_results"][0]["text_layer"]
-        update_scene(invitation_id, scene_index, text_layer=text_layer, status="done")
+        update_scene(invitation_id, scene_index, text_layer=text_layer, status="done", analyzed=False)
     except Exception as err:
         logger.error(f"[{invitation_id}] Scene {scene_index} regenerate failed: {err}")
-        update_scene(invitation_id, scene_index, status="failed")
+        # Restore status to 'done' if an image already existed, else 'failed', and refund counter
+        try:
+            st = load_state(invitation_id)
+            sc = next((s for s in st["scenes"] if s["scene_index"] == scene_index), {})
+            restore = "done" if sc.get("image_path") else "failed"
+        except Exception:
+            restore = "failed"
+        release_image_generation(invitation_id, scene_index, restore_status=restore)
 
 
 def run_generate_video_task(invitation_id: str, scene_index: int) -> None:
@@ -430,16 +456,7 @@ def run_generate_video_task(invitation_id: str, scene_index: int) -> None:
         generate_video_for_scene(invitation_id, scene_index)
     except Exception as err:
         logger.error(f"[{invitation_id}] Scene {scene_index} video generation failed: {err}")
-        try:
-            st = load_state(invitation_id)
-            scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
-            if not scene.get("animation_plan"):
-                scene["animation_plan"] = {}
-            scene["animation_plan"]["videoStatus"] = "failed"
-            scene["animation_plan"]["videoProgress"] = 0
-            save_state(invitation_id, st)
-        except Exception:
-            pass
+        release_video_generation(invitation_id, scene_index)
 
 
 def run_export_video_task(
@@ -549,10 +566,24 @@ def run_export_video_task(
 def create_scenes_endpoint(req: CreateScenesRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
     """
     Corresponds to api.ts:createScenes.
-    Saves invitation, kicks off Stage 1 (split, style_bible, prompts) in background.
+    If the invitation already has scenes in the DB, returns immediately with no new AI call.
+    Otherwise saves invitation and kicks off Stage 1 (split, style_bible, prompts) in background.
     """
     raw_inv = req.invitation
     inv_id = str(raw_inv.get("id") or uuid.uuid4().hex[:8])
+
+    # Idempotency: if invitation already exists with scenes, return without re-running AI
+    try:
+        existing_st = load_state(inv_id)
+        if existing_st.get("scenes"):
+            return {
+                "invitation_id": inv_id,
+                "status": existing_st.get("status", "stage1_done"),
+                "existing": True,
+            }
+    except FileNotFoundError:
+        pass
+
     backend_input = frontend_to_backend_input(raw_inv)
     backend_input["frontend_invitation"] = raw_inv
 
@@ -566,21 +597,26 @@ def create_scenes_endpoint(req: CreateScenesRequest, background_tasks: Backgroun
 def generate_images_endpoint(req: GenerateImagesRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
     """
     Corresponds to api.ts:generateImages.
-    Generates 9:16 background artwork and runs text layout for each scene.
+    Generates background artwork only for scenes that do not yet have an image.
     """
     try:
-        load_state(req.invitation_id)
+        st = load_state(req.invitation_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Invitation {req.invitation_id} not found")
+
+    scenes = st.get("scenes", [])
+    if scenes and all(s.get("image_path") for s in scenes):
+        return {"invitation_id": req.invitation_id, "status": "done", "existing": True}
 
     background_tasks.add_task(run_generate_images_task, req.invitation_id, req.story_driven)
     return {"invitation_id": req.invitation_id, "status": "running"}
 
 
 @app.post("/api/regenerate-image", status_code=status.HTTP_202_ACCEPTED)
-def regenerate_image_endpoint(req: RegenerateImageRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def regenerate_image_endpoint(req: RegenerateImageRequest, background_tasks: BackgroundTasks) -> Any:
     """
     Corresponds to api.ts:regenerateImage and editImageWithInstruction.
+    Atomically checks & increments image_generations (1 <= image_generations < MAX_IMAGE_GENERATIONS_PER_SCENE).
     """
     try:
         st = load_state(req.invitation_id)
@@ -589,7 +625,13 @@ def regenerate_image_endpoint(req: RegenerateImageRequest, background_tasks: Bac
 
     scene = next((s for s in st["scenes"] if s["scene_index"] == req.scene_index), None)
     if not scene:
-        raise HTTPException(status_code=404, detail=f"Scene {req.scene_index} not found")
+        raise HTTPException(status_code=404, detail=f"Card {req.scene_index + 1} not found")
+
+    claimed, http_status, err_code, detail = try_claim_image_regeneration(
+        req.invitation_id, req.scene_index, MAX_IMAGE_GENERATIONS_PER_SCENE
+    )
+    if not claimed:
+        return JSONResponse(status_code=http_status, content={"code": err_code, "detail": detail})
 
     final_prompt = req.custom_prompt
     if req.instruction and req.instruction.strip():
@@ -604,28 +646,50 @@ def regenerate_image_endpoint(req: RegenerateImageRequest, background_tasks: Bac
 def analyze_image_endpoint(req: AnalyzeImageRequest) -> dict[str, Any]:
     """
     Corresponds to api.ts:analyzeImage.
-    Runs vision analysis on scene image; returns structured AnimationPlan.
+    Runs vision analysis once per image (skipped if analyzed=True); returns structured AnimationPlan.
     """
     try:
+        st = load_state(req.invitation_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    scene = next((s for s in st.get("scenes", []) if s["scene_index"] == req.scene_index), None)
+    if not scene:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    # Skip re-analyzing if already analyzed for this image
+    if scene.get("analyzed") and scene.get("animation_plan"):
+        plan = dict(scene["animation_plan"])
+        plan["shouldMove"] = format_should_move_as_strings(plan.get("shouldMove", []))
+        return plan
+
+    try:
         plan = analyze_one_scene(req.invitation_id, req.scene_index, req.animation_note)
+        update_scene(req.invitation_id, req.scene_index, analyzed=True)
         return plan
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Invitation or scene image not found")
+        raise HTTPException(status_code=404, detail="Invitation or card image not found")
     except Exception as exc:
         logger.error(f"analyze-image error: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/api/generate-video", status_code=status.HTTP_202_ACCEPTED)
-def generate_video_endpoint(req: GenerateVideoRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def generate_video_endpoint(req: GenerateVideoRequest, background_tasks: BackgroundTasks) -> Any:
     """
     Corresponds to api.ts:generateVideo.
-    Triggers Grok video generation for a single scene in the background.
+    Atomically checks & increments video_generations (< MAX_VIDEO_GENERATIONS_PER_SCENE).
     """
     try:
         load_state(req.invitation_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Invitation {req.invitation_id} not found")
+
+    claimed, http_status, err_code, detail = try_claim_video_generation(
+        req.invitation_id, req.scene_index, MAX_VIDEO_GENERATIONS_PER_SCENE
+    )
+    if not claimed:
+        return JSONResponse(status_code=http_status, content={"code": err_code, "detail": detail})
 
     background_tasks.add_task(run_generate_video_task, req.invitation_id, req.scene_index)
     return {"invitation_id": req.invitation_id, "scene_index": req.scene_index, "status": "queued"}
@@ -673,6 +737,9 @@ def get_invitation_status(invitation_id: str) -> dict[str, Any]:
             "video_progress": v_progress,
             "image_url": f"/media/{invitation_id}/scene_{idx}.png" if has_image else None,
             "video_url": f"/media/{invitation_id}/scene_{idx}.mp4" if has_video else None,
+            "image_generations": int(s.get("image_generations", 0)),
+            "video_generations": int(s.get("video_generations", 0)),
+            "analyzed": bool(s.get("analyzed", False)),
         })
 
     return {

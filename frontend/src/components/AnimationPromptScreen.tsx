@@ -12,7 +12,7 @@ import {
   Video,
 } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
-import { analyzeImage, generateVideo, patchScene } from '../services/api';
+import { ApiError, analyzeImage, generateVideo, patchScene } from '../services/api';
 import { CameraMovement, Scene } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
 
@@ -34,13 +34,14 @@ export const AnimationPromptScreen: React.FC = () => {
 
   const [analyzingSceneIds, setAnalyzingSceneIds] = useState<string[]>([]);
   const [isGeneratingVideos, setIsGeneratingVideos] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Automatically run vision analysis on any scene that hasn't been analyzed yet
+    // Automatically run vision analysis once per image on any scene not yet analyzed
     if (activeInvitation && activeInvitation.scenes.length > 0) {
       activeInvitation.scenes.forEach((sc) => {
         const plan = sc.animationPlan;
-        if (!plan || !plan.objectsDetected || plan.objectsDetected.length === 0) {
+        if (!sc.analyzed && (!plan || !plan.objectsDetected || plan.objectsDetected.length === 0)) {
           handleReanalyze(sc.id);
         }
       });
@@ -64,6 +65,9 @@ export const AnimationPromptScreen: React.FC = () => {
 
   const scenes = activeInvitation.scenes;
   const allVideosDone = scenes.every((sc) => sc.animationPlan.videoStatus === 'done');
+  const allVideosLimitReached = scenes.every(
+    (sc) => (sc.videoGenerations ?? (sc.videoUrl ? 1 : 0)) >= (sc.maxVideoGenerations ?? 1)
+  );
 
   const handleReanalyze = async (sceneId: string) => {
     const target = scenes.find((s) => s.id === sceneId);
@@ -71,7 +75,11 @@ export const AnimationPromptScreen: React.FC = () => {
     setAnalyzingSceneIds((prev) => (prev.includes(sceneId) ? prev : [...prev, sceneId]));
     try {
       const plan = await analyzeImage(target, target.animationNote);
-      updateSceneAnimationPlan(sceneId, () => plan);
+      updateScene(sceneId, (prev) => ({
+        ...prev,
+        analyzed: true,
+        animationPlan: plan,
+      }));
     } catch (err) {
       console.error(`Failed to analyze scene ${sceneId}:`, err);
     } finally {
@@ -80,6 +88,10 @@ export const AnimationPromptScreen: React.FC = () => {
   };
 
   const handleGenerateOneVideo = async (sc: Scene) => {
+    const vGen = sc.videoGenerations ?? (sc.videoUrl ? 1 : 0);
+    const vMax = sc.maxVideoGenerations ?? 1;
+    if (vGen >= vMax) return;
+    setVideoError(null);
     try {
       const updated = await generateVideo(sc, (sceneId, status, progress) => {
         updateSceneAnimationPlan(sceneId, (prev) => ({
@@ -89,7 +101,17 @@ export const AnimationPromptScreen: React.FC = () => {
         }));
       });
       updateScene(sc.id, () => updated);
-    } catch (err) {
+    } catch (err: any) {
+      if (err instanceof ApiError && err.code === 'LIMIT_REACHED') {
+        updateScene(sc.id, (prev) => ({ ...prev, videoGenerations: vMax }));
+        setVideoError(err.message);
+        return;
+      }
+      if (err instanceof ApiError && err.code === 'IN_PROGRESS') {
+        setVideoError(err.message);
+        return;
+      }
+      setVideoError(err?.message || 'Video generation failed.');
       updateSceneAnimationPlan(sc.id, (prev) => ({
         ...prev,
         videoStatus: 'failed',
@@ -99,6 +121,8 @@ export const AnimationPromptScreen: React.FC = () => {
   };
 
   const handleGenerateAllVideos = async () => {
+    if (allVideosLimitReached) return;
+    setVideoError(null);
     setIsGeneratingVideos(true);
     updateActiveStatus('Generating');
     try {
@@ -140,16 +164,16 @@ export const AnimationPromptScreen: React.FC = () => {
 
           <button
             type="button"
-            disabled={isGeneratingVideos}
+            disabled={isGeneratingVideos || allVideosLimitReached}
             onClick={handleGenerateAllVideos}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors disabled:opacity-60 cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isGeneratingVideos ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Video className="w-4 h-4" />
             )}
-            <span>{allVideosDone ? 'Regenerate videos' : 'Generate videos'}</span>
+            <span>{allVideosLimitReached ? 'All videos generated' : 'Generate videos'}</span>
           </button>
 
           {allVideosDone && (
@@ -164,6 +188,12 @@ export const AnimationPromptScreen: React.FC = () => {
           )}
         </div>
       </div>
+
+      {videoError && (
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
+          {videoError}
+        </div>
+      )}
 
       {/* Per-scene Video Progress Strip (shown when queued/generating/done) */}
       {scenes.some((s) => s.animationPlan.videoStatus !== 'idle') && (

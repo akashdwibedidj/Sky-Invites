@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
 import { GOOGLE_FONT_OPTIONS } from '../data/mockInvitations';
-import { editImageWithInstruction, patchScene, regenerateImage } from '../services/api';
+import { ApiError, editImageWithInstruction, patchScene, regenerateImage } from '../services/api';
 import { TextAlignment, TextLayer, TextLine, TextPlacement } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
 
@@ -37,6 +37,7 @@ export const ImageReviewScreen: React.FC = () => {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [editInstruction, setEditInstruction] = useState('');
   const [isEditingImage, setIsEditingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   if (!activeInvitation || activeInvitation.scenes.length === 0) {
     return (
@@ -62,11 +63,23 @@ export const ImageReviewScreen: React.FC = () => {
   const activeScene =
     scenes.find((s) => s.id === selectedSceneId) ?? scenes[0];
 
+  const imageGenerations = activeScene.imageGenerations ?? (activeScene.imageUrl ? 1 : 0);
+  const maxImageGenerations = activeScene.maxImageGenerations ?? 2;
+  const regenLimitReached = imageGenerations >= maxImageGenerations;
+  const isImageBusy = isRegenerating || isEditingImage || activeScene.imageStatus === 'generating';
+
   const handleRegenerate = async () => {
+    if (regenLimitReached || isImageBusy) return;
+    setImageError(null);
     setIsRegenerating(true);
     try {
       const updated = await regenerateImage(activeScene, activeScene.imagePrompt);
       updateScene(activeScene.id, () => updated);
+    } catch (err: any) {
+      if (err instanceof ApiError && err.code === 'LIMIT_REACHED') {
+        updateScene(activeScene.id, (sc) => ({ ...sc, imageGenerations: maxImageGenerations }));
+      }
+      setImageError(err?.message || 'Unable to regenerate image.');
     } finally {
       setIsRegenerating(false);
     }
@@ -74,12 +87,18 @@ export const ImageReviewScreen: React.FC = () => {
 
   const handleEditWithInstruction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editInstruction.trim()) return;
+    if (!editInstruction.trim() || regenLimitReached || isImageBusy) return;
+    setImageError(null);
     setIsEditingImage(true);
     try {
       const updated = await editImageWithInstruction(activeScene, editInstruction);
       updateScene(activeScene.id, () => updated);
       setEditInstruction('');
+    } catch (err: any) {
+      if (err instanceof ApiError && err.code === 'LIMIT_REACHED') {
+        updateScene(activeScene.id, (sc) => ({ ...sc, imageGenerations: maxImageGenerations }));
+      }
+      setImageError(err?.message || 'Unable to apply image edit.');
     } finally {
       setIsEditingImage(false);
     }
@@ -512,14 +531,25 @@ export const ImageReviewScreen: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                disabled={isRegenerating || isEditingImage}
+                disabled={regenLimitReached || isImageBusy}
                 onClick={handleRegenerate}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-stone-800 bg-[#FAF6EE] hover:bg-[#F2E9D7] border border-[#E3D3BA] rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-stone-800 bg-[#FAF6EE] hover:bg-[#F2E9D7] border border-[#E3D3BA] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                <span>Regenerate image</span>
+                <span>{regenLimitReached ? 'Regeneration used' : 'Regenerate image'}</span>
               </button>
+              {regenLimitReached && (
+                <span className="text-[11px] text-stone-500">
+                  1 of 1 regeneration used for this card
+                </span>
+              )}
             </div>
+
+            {imageError && (
+              <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                {imageError}
+              </p>
+            )}
 
             <form
               onSubmit={handleEditWithInstruction}
@@ -531,18 +561,23 @@ export const ImageReviewScreen: React.FC = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="text"
+                  disabled={regenLimitReached || isImageBusy}
                   value={editInstruction}
                   onChange={(e) => setEditInstruction(e.target.value)}
-                  placeholder="e.g., Add warmer candlelight or softer floral framing"
-                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                  placeholder={
+                    regenLimitReached
+                      ? 'Regeneration used for this card'
+                      : 'e.g., Add warmer candlelight or softer floral framing'
+                  }
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58] disabled:bg-stone-50 disabled:text-stone-400"
                 />
                 <button
                   type="submit"
-                  disabled={isEditingImage || !editInstruction.trim()}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 rounded-xl disabled:opacity-40 whitespace-nowrap cursor-pointer"
+                  disabled={regenLimitReached || isImageBusy || !editInstruction.trim()}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer"
                 >
                   <Wand2 className="w-3.5 h-3.5" />
-                  <span>Apply</span>
+                  <span>{regenLimitReached ? 'Regeneration used' : 'Apply'}</span>
                 </button>
               </div>
             </form>

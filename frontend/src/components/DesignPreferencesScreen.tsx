@@ -42,6 +42,9 @@ export const DesignPreferencesScreen: React.FC = () => {
   }
 
   const { design, details, type } = activeInvitation;
+  const hasGeneratedImages = activeInvitation.scenes.some(
+    (s) => s.imageStatus === 'done' && Boolean(s.imageUrl)
+  );
 
   const previewNames =
     details.groomName && details.brideName
@@ -92,11 +95,12 @@ export const DesignPreferencesScreen: React.FC = () => {
             <div className="inline-flex items-center gap-3 bg-[#FAF9F6] border border-stone-200 rounded-xl p-1.5 self-start sm:self-auto">
               <button
                 type="button"
+                disabled={hasGeneratedImages}
                 onClick={() =>
                   updateActiveDesign({ sceneCount: Math.max(1, design.sceneCount - 1) })
                 }
                 aria-label="Decrease scene count"
-                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 cursor-pointer"
+                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Minus className="w-4 h-4" />
               </button>
@@ -105,15 +109,21 @@ export const DesignPreferencesScreen: React.FC = () => {
               </span>
               <button
                 type="button"
+                disabled={hasGeneratedImages}
                 onClick={() =>
                   updateActiveDesign({ sceneCount: Math.min(12, design.sceneCount + 1) })
                 }
                 aria-label="Increase scene count"
-                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 cursor-pointer"
+                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
+            {hasGeneratedImages && (
+              <p className="text-[11px] text-stone-500">
+                Card count & duration are locked after images are generated.
+              </p>
+            )}
           </div>
 
           {/* Transition Between Pages */}
@@ -471,11 +481,12 @@ export const DesignPreferencesScreen: React.FC = () => {
                 min={3}
                 max={8}
                 step={1}
+                disabled={hasGeneratedImages}
                 value={design.durationPerScene}
                 onChange={(e) =>
                   updateActiveDesign({ durationPerScene: Number(e.target.value) })
                 }
-                className="w-full accent-[#B88B58] cursor-pointer"
+                className="w-full accent-[#B88B58] disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
               />
               <div className="flex justify-between text-[11px] text-stone-400 mt-1 tabular-nums">
                 <span>3s (Brisk)</span>
@@ -555,11 +566,11 @@ export const DesignPreferencesScreen: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigateTo('generating')}
+            onClick={() => navigateTo(hasGeneratedImages ? 'step-3-review' : 'generating')}
             className="inline-flex items-center gap-2.5 px-7 py-3.5 text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors cursor-pointer"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Generate Invitation</span>
+            {!hasGeneratedImages && <Sparkles className="w-4 h-4" />}
+            <span>{hasGeneratedImages ? 'Back to Review' : 'Generate Invitation'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

@@ -15,6 +15,33 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 let currentInvitationId: string = '';
 
+export class ApiError extends Error {
+  code?: string;
+  status: number;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function throwApiError(res: Response, fallbackMessage: string): Promise<never> {
+  let code: string | undefined;
+  let detail: string | undefined;
+  try {
+    const body = await res.json();
+    if (body && typeof body === 'object') {
+      code = body.code;
+      detail = body.detail || body.message;
+    }
+  } catch {
+    // ignore non-JSON body
+  }
+  throw new ApiError(detail || fallbackMessage, res.status, code);
+}
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function resolveMediaUrl(url: string | null | undefined): string {
@@ -322,7 +349,7 @@ export async function regenerateImage(scene: Scene, customPrompt?: string): Prom
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to regenerate image: ${res.statusText}`);
+    await throwApiError(res, `Failed to regenerate image: ${res.statusText}`);
   }
 
   // Poll until done or failed
@@ -385,7 +412,7 @@ export async function editImageWithInstruction(scene: Scene, instruction: string
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to edit image with instruction: ${res.statusText}`);
+    await throwApiError(res, `Failed to edit image with instruction: ${res.statusText}`);
   }
 
   // Poll until done or failed
@@ -478,8 +505,16 @@ export async function generateVideo(
   });
 
   if (!res.ok) {
-    onProgress(scene.id, 'failed', 0);
-    throw new Error(`Failed to start video generation: ${res.statusText}`);
+    let errCode: string | undefined;
+    try {
+      const cloned = res.clone();
+      const body = await cloned.json();
+      errCode = body?.code;
+    } catch { /* ignore */ }
+    if (errCode !== 'IN_PROGRESS') {
+      onProgress(scene.id, 'failed', 0);
+    }
+    await throwApiError(res, `Failed to start video generation: ${res.statusText}`);
   }
 
   let videoDone = false;

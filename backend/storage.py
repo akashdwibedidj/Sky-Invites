@@ -4,6 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from pathlib import Path
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db import Invitation, Scene, get_session
@@ -95,6 +96,9 @@ def load_state(invitation_id: str) -> dict:
                 scene_dict["video_path"] = s.video_path
             if s.status is not None:
                 scene_dict["status"] = s.status
+            scene_dict["image_generations"] = s.image_generations or 0
+            scene_dict["video_generations"] = s.video_generations or 0
+            scene_dict["analyzed"] = bool(s.analyzed)
             scenes_list.append(scene_dict)
 
         state = {
@@ -157,6 +161,9 @@ def save_state(invitation_id: str, state: dict) -> None:
                 "animation_plan",
                 "video_path",
                 "status",
+                "image_generations",
+                "video_generations",
+                "analyzed",
             ):
                 if col in scene:
                     scene_values[col] = scene[col]
@@ -191,3 +198,158 @@ def update_scene(invitation_id: str, scene_index: int, **fields) -> None:
             )
         )
         session.execute(stmt)
+
+
+def try_claim_initial_image_generation(
+    invitation_id: str, scene_index: int
+) -> tuple[bool, int, str | None, str | None]:
+    """
+    Atomically claim the initial image generation slot (only when image_generations = 0
+    and status != 'generating' and image_path IS NULL).
+    Returns (claimed, http_status, error_code, detail).
+    """
+    with get_session() as session:
+        row = session.execute(
+            text(
+                "UPDATE scenes "
+                "SET image_generations = image_generations + 1, status = 'generating' "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx "
+                "AND image_generations = 0 "
+                "AND COALESCE(status, 'pending') != 'generating' "
+                "AND image_path IS NULL "
+                "RETURNING image_generations"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index},
+        ).first()
+        if row:
+            return True, 200, None, None
+
+        existing = session.execute(
+            text(
+                "SELECT image_generations, status, image_path FROM scenes "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index},
+        ).first()
+        if not existing:
+            return False, 404, "NOT_FOUND", f"Card {scene_index + 1} not found."
+        if existing.status == "generating":
+            return False, 409, "IN_PROGRESS", "Image generation is already in progress for this card."
+        if existing.image_path is not None or existing.image_generations >= 1:
+            return False, 409, "ALREADY_GENERATED", "Image has already been generated for this card."
+        return False, 409, "IN_PROGRESS", "Unable to start image generation."
+
+
+def try_claim_image_regeneration(
+    invitation_id: str, scene_index: int, max_limit: int
+) -> tuple[bool, int, str | None, str | None]:
+    """
+    Atomically claim an image regeneration slot (only when 1 <= image_generations < max_limit
+    and status != 'generating').
+    Returns (claimed, http_status, error_code, detail).
+    """
+    with get_session() as session:
+        row = session.execute(
+            text(
+                "UPDATE scenes "
+                "SET image_generations = image_generations + 1, status = 'generating' "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx "
+                "AND image_generations >= 1 "
+                "AND image_generations < :max_limit "
+                "AND COALESCE(status, 'pending') != 'generating' "
+                "RETURNING image_generations"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index, "max_limit": max_limit},
+        ).first()
+        if row:
+            return True, 200, None, None
+
+        existing = session.execute(
+            text(
+                "SELECT image_generations, status FROM scenes "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index},
+        ).first()
+        if not existing:
+            return False, 404, "NOT_FOUND", f"Card {scene_index + 1} not found."
+        if existing.status == "generating":
+            return False, 409, "IN_PROGRESS", "Image generation is already in progress for this card."
+        if existing.image_generations == 0:
+            return False, 400, "NO_INITIAL_IMAGE", "Initial image must be generated first."
+        return False, 403, "LIMIT_REACHED", "Image regeneration limit reached (maximum 1 regeneration per card)."
+
+
+def release_image_generation(
+    invitation_id: str, scene_index: int, restore_status: str = "failed"
+) -> None:
+    """Refund 1 image_generations count when generation fails."""
+    with get_session() as session:
+        session.execute(
+            text(
+                "UPDATE scenes "
+                "SET image_generations = GREATEST(0, image_generations - 1), status = :st "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index, "st": restore_status},
+        )
+
+
+def try_claim_video_generation(
+    invitation_id: str, scene_index: int, max_limit: int
+) -> tuple[bool, int, str | None, str | None]:
+    """
+    Atomically claim a video generation slot (only when video_generations < max_limit
+    and videoStatus is not queued/generating).
+    Returns (claimed, http_status, error_code, detail).
+    """
+    with get_session() as session:
+        row = session.execute(
+            text(
+                "UPDATE scenes "
+                "SET video_generations = video_generations + 1, "
+                "    animation_plan = jsonb_set("
+                "        COALESCE(animation_plan, '{}'::jsonb), "
+                "        '{videoStatus}', '\"queued\"'::jsonb, true"
+                "    ) "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx "
+                "AND video_generations < :max_limit "
+                "AND COALESCE(animation_plan->>'videoStatus', 'idle') NOT IN ('queued', 'generating') "
+                "RETURNING video_generations"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index, "max_limit": max_limit},
+        ).first()
+        if row:
+            return True, 200, None, None
+
+        existing = session.execute(
+            text(
+                "SELECT video_generations, animation_plan FROM scenes "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index},
+        ).first()
+        if not existing:
+            return False, 404, "NOT_FOUND", f"Card {scene_index + 1} not found."
+        plan = existing.animation_plan or {}
+        v_status = plan.get("videoStatus", "idle")
+        if v_status in ("queued", "generating"):
+            return False, 409, "IN_PROGRESS", "Video generation is already in progress for this card."
+        return False, 403, "LIMIT_REACHED", "Video generation limit reached (maximum 1 video per card)."
+
+
+def release_video_generation(invitation_id: str, scene_index: int) -> None:
+    """Refund 1 video_generations count when video generation fails."""
+    with get_session() as session:
+        session.execute(
+            text(
+                "UPDATE scenes "
+                "SET video_generations = GREATEST(0, video_generations - 1), "
+                "    animation_plan = jsonb_set("
+                "        jsonb_set(COALESCE(animation_plan, '{}'::jsonb), '{videoStatus}', '\"failed\"'::jsonb, true), "
+                "        '{videoProgress}', '0'::jsonb, true"
+                "    ) "
+                "WHERE invitation_id = :inv_id AND scene_index = :idx"
+            ),
+            {"inv_id": invitation_id, "idx": scene_index},
+        )

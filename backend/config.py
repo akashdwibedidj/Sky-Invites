@@ -22,6 +22,10 @@ VIDEO_MODEL = "grok-imagine-video-1.5-lite"
 VIDEO_DURATION = 2                  # seconds  (1–15)
 VIDEO_RESOLUTION = "480p"          # "480p" | "720p" | "1080p"
 
+# ── Generation limits (per scene/card) ────────────────────────────────────────
+MAX_IMAGE_GENERATIONS_PER_SCENE = 2  # 1 initial generation + 1 regeneration
+MAX_VIDEO_GENERATIONS_PER_SCENE = 1  # 1 video generation per card, no regeneration
+
 # ── Typography ────────────────────────────────────────────────────────────────
 # layout_text must pick fonts ONLY from this list.
 ALLOWED_FONTS = [
