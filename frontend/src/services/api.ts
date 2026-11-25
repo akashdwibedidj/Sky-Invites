@@ -1,3 +1,10 @@
+/**
+ * Sky Invites Editor API Service
+ * Plan 4: adds Authorization header to every request using the token from siteApi.
+ * Global 401 handler: clears token and redirects to /login.
+ */
+
+import { getAuthToken, setAuthToken } from '../site/services/siteApi';
 import { GENERATED_SCENE_IMAGES } from '../data/mockInvitations';
 import {
   AnimationPlan,
@@ -40,6 +47,25 @@ async function throwApiError(res: Response, fallbackMessage: string): Promise<ne
     // ignore non-JSON body
   }
   throw new ApiError(detail || fallbackMessage, res.status, code);
+}
+
+/** Build fetch headers with auth token. */
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
+/**
+ * Handle 401 from editor API calls.
+ * Clears token and redirects unless already on an auth page.
+ */
+function handle401(): void {
+  const authPaths = ['/login', '/signup'];
+  if (authPaths.some((p) => window.location.pathname.startsWith(p))) return;
+  setAuthToken(null);
+  window.location.replace('/login?session=expired');
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -150,7 +176,6 @@ function getSceneImageByIndex(index: number, theme: string): string {
 }
 
 function getSceneTextColor(imageUrl: string, paletteText: string): string {
-  // Twilight palace image has a darker upper sky; ensure legible contrast
   if (imageUrl.includes('sangeet_starlit_palace')) {
     return '#FAF6EE';
   }
@@ -162,16 +187,15 @@ function getSceneTextColor(imageUrl: string, paletteText: string): string {
 
 /**
  * 1. createScenes
- * Calls POST /api/create-scenes, polls /status until stage 1 is done,
- * then GETs the invitation and returns real Scene[] in the existing shape.
  */
 export async function createScenes(invitation: Invitation): Promise<Scene[]> {
   const res = await fetch(`${API_URL}/api/create-scenes`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ invitation }),
   });
 
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     throw new Error(`Failed to create scenes: ${res.status} ${res.statusText}`);
   }
@@ -182,23 +206,23 @@ export async function createScenes(invitation: Invitation): Promise<Scene[]> {
   invitation.id = invitationId;
   invitation.invitation_id = invitationId;
 
-  // Poll /api/invitations/{id}/status until stage1_done (or failed)
   const maxPolls = 60;
   for (let i = 0; i < maxPolls; i++) {
     await delay(1500);
-    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`, {
+      headers: authHeaders(),
+    });
     if (!statusRes.ok) continue;
     const statusData = await statusRes.json();
-    if (statusData.status === 'stage1_done') {
-      break;
-    }
+    if (statusData.status === 'stage1_done') break;
     if (statusData.status === 'failed') {
       throw new Error(`Scene creation failed for invitation ${invitationId}`);
     }
   }
 
-  // GET the invitation and return real Scene[] in the existing shape
-  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`, {
+    headers: authHeaders(),
+  });
   if (!invRes.ok) {
     throw new Error(`Failed to fetch invitation: ${invRes.status} ${invRes.statusText}`);
   }
@@ -216,9 +240,6 @@ export async function createScenes(invitation: Invitation): Promise<Scene[]> {
 
 /**
  * 2. generateImages
- * Calls POST /api/generate-images, then polls /status every 2-3 seconds
- * and calls onSceneProgress per scene as each image finishes (generating -> done/failed, with image URL).
- * Passes storyDriven through.
  */
 export async function generateImages(
   scenes: Scene[],
@@ -232,25 +253,25 @@ export async function generateImages(
 
   const res = await fetch(`${API_URL}/api/generate-images`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({
       invitation_id: invitationId,
       story_driven: storyDriven,
     }),
   });
 
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     throw new Error(`Failed to start image generation: ${res.statusText}`);
   }
 
-  // Mark all scenes as generating initially
   scenes.forEach((sc) => onSceneProgress(sc.id, 'generating'));
 
   const sceneStatusMap = new Map<string, Scene['imageStatus']>();
   scenes.forEach((sc) => sceneStatusMap.set(sc.id, 'generating'));
 
   let allCompleted = false;
-  const pollInterval = 2500; // 2.5 seconds
+  const pollInterval = 2500;
   const maxAttempts = 120;
   let attempts = 0;
 
@@ -259,7 +280,9 @@ export async function generateImages(
     attempts++;
 
     try {
-      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`, {
+        headers: authHeaders(),
+      });
       if (!statusRes.ok) continue;
 
       const statusData: {
@@ -310,8 +333,9 @@ export async function generateImages(
     }
   }
 
-  // Fetch complete final scenes from GET /api/invitations/{id}
-  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`, {
+    headers: authHeaders(),
+  });
   if (invRes.ok) {
     const invData = await invRes.json();
     return (invData.scenes || []).map((sc: any) => ({
@@ -331,8 +355,6 @@ export async function generateImages(
 
 /**
  * 3. regenerateImage
- * Calls POST /api/regenerate-image and polls /status until done or failed.
- * Keeps the existing text layer unless backend returns a new one.
  */
 export async function regenerateImage(scene: Scene, customPrompt?: string): Promise<Scene> {
   const { invitationId, sceneIndex } = extractInvitationId(scene);
@@ -340,7 +362,7 @@ export async function regenerateImage(scene: Scene, customPrompt?: string): Prom
 
   const res = await fetch(`${API_URL}/api/regenerate-image`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({
       invitation_id: invitationId,
       scene_index: sceneIndex,
@@ -348,20 +370,24 @@ export async function regenerateImage(scene: Scene, customPrompt?: string): Prom
     }),
   });
 
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     await throwApiError(res, `Failed to regenerate image: ${res.statusText}`);
   }
 
-  // Poll until done or failed
   while (true) {
     await delay(2000);
-    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`, {
+      headers: authHeaders(),
+    });
     if (statusRes.ok) {
       const data = await statusRes.json();
       const scStatus = data.scenes?.find((s: any) => s.scene_index === sceneIndex || s.id === scene.id);
       if (scStatus) {
         if (scStatus.image_status === 'done') {
-          const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+          const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`, {
+            headers: authHeaders(),
+          });
           if (invRes.ok) {
             const invData = await invRes.json();
             const updatedScene = invData.scenes?.find((s: any) => s.id === scene.id || s.order === scene.order);
@@ -392,8 +418,6 @@ export async function regenerateImage(scene: Scene, customPrompt?: string): Prom
 
 /**
  * 3b. editImageWithInstruction
- * Calls POST /api/regenerate-image with instruction appended to current image prompt.
- * Keeps existing text layer unless backend returns a new one. Polls until done.
  */
 export async function editImageWithInstruction(scene: Scene, instruction: string): Promise<Scene> {
   const { invitationId, sceneIndex } = extractInvitationId(scene);
@@ -402,7 +426,7 @@ export async function editImageWithInstruction(scene: Scene, instruction: string
 
   const res = await fetch(`${API_URL}/api/regenerate-image`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({
       invitation_id: invitationId,
       scene_index: sceneIndex,
@@ -411,20 +435,24 @@ export async function editImageWithInstruction(scene: Scene, instruction: string
     }),
   });
 
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     await throwApiError(res, `Failed to edit image with instruction: ${res.statusText}`);
   }
 
-  // Poll until done or failed
   while (true) {
     await delay(2000);
-    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+    const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`, {
+      headers: authHeaders(),
+    });
     if (statusRes.ok) {
       const data = await statusRes.json();
       const scStatus = data.scenes?.find((s: any) => s.scene_index === sceneIndex || s.id === scene.id);
       if (scStatus) {
         if (scStatus.image_status === 'done') {
-          const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+          const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`, {
+            headers: authHeaders(),
+          });
           if (invRes.ok) {
             const invData = await invRes.json();
             const updatedScene = invData.scenes?.find((s: any) => s.id === scene.id || s.order === scene.order);
@@ -455,7 +483,6 @@ export async function editImageWithInstruction(scene: Scene, instruction: string
 
 /**
  * 4. analyzeImage
- * Calls POST /api/analyze-image (including animation note if available), returns the AnimationPlan.
  */
 export async function analyzeImage(scene: Scene, animationNote?: string): Promise<AnimationPlan> {
   const { invitationId, sceneIndex } = extractInvitationId(scene);
@@ -463,7 +490,7 @@ export async function analyzeImage(scene: Scene, animationNote?: string): Promis
 
   const res = await fetch(`${API_URL}/api/analyze-image`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({
       invitation_id: invitationId,
       scene_index: sceneIndex,
@@ -471,6 +498,7 @@ export async function analyzeImage(scene: Scene, animationNote?: string): Promis
     }),
   });
 
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     throw new Error(`Failed to analyze image: ${res.statusText}`);
   }
@@ -481,8 +509,6 @@ export async function analyzeImage(scene: Scene, animationNote?: string): Promis
 
 /**
  * 5. generateVideo
- * Calls POST /api/generate-video, polls /status, maps video_status to onProgress callback
- * (queued, generating, done, failed) and uses backend progress value.
  */
 export async function generateVideo(
   scene: Scene,
@@ -497,13 +523,14 @@ export async function generateVideo(
 
   const res = await fetch(`${API_URL}/api/generate-video`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({
       invitation_id: invitationId,
       scene_index: sceneIndex,
     }),
   });
 
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     let errCode: string | undefined;
     try {
@@ -529,7 +556,9 @@ export async function generateVideo(
     attempts++;
 
     try {
-      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`);
+      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/status`, {
+        headers: authHeaders(),
+      });
       if (!statusRes.ok) continue;
 
       const statusData = await statusRes.json();
@@ -557,8 +586,9 @@ export async function generateVideo(
     throw new Error(`Video generation failed for scene ${scene.id}`);
   }
 
-  // Fetch updated invitation to get the real scene with videoUrl
-  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  const invRes = await fetch(`${API_URL}/api/invitations/${invitationId}`, {
+    headers: authHeaders(),
+  });
   if (invRes.ok) {
     const invData = await invRes.json();
     const updatedScene = invData.scenes?.find((s: any) => s.id === scene.id || s.order === scene.order);
@@ -584,7 +614,7 @@ export async function generateVideo(
 }
 
 /**
- * Helper to patch a scene's text layer, prompt or animation note
+ * patchScene
  */
 export async function patchScene(
   scene: Scene,
@@ -599,9 +629,10 @@ export async function patchScene(
   const { invitationId, sceneIndex } = extractInvitationId(scene);
   const res = await fetch(`${API_URL}/api/invitations/${invitationId}/scenes/${sceneIndex}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(patch),
   });
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     throw new Error(`Failed to patch scene: ${res.statusText}`);
   }
@@ -616,8 +647,6 @@ export async function patchScene(
 
 /**
  * 6. exportVideo
- * Calls POST /api/export-video, polls /api/invitations/{id}/export-status until done,
- * and returns the final 1080x1920 video URL, filename, and size.
  */
 export async function exportVideo(
   invitation: Invitation,
@@ -632,7 +661,7 @@ export async function exportVideo(
 
   const res = await fetch(`${API_URL}/api/export-video`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({
       invitation_id: invitationId,
       scenes: invitation.scenes,
@@ -641,12 +670,13 @@ export async function exportVideo(
     }),
   });
 
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     throw new Error(`Failed to start video export: ${res.statusText}`);
   }
 
   const pollInterval = 1500;
-  const maxAttempts = 240; // up to 6 minutes for full 1080x1920 render
+  const maxAttempts = 240;
   let attempts = 0;
 
   while (attempts < maxAttempts) {
@@ -664,7 +694,9 @@ export async function exportVideo(
     } | null = null;
 
     try {
-      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/export-status`);
+      const statusRes = await fetch(`${API_URL}/api/invitations/${invitationId}/export-status`, {
+        headers: authHeaders(),
+      });
       if (statusRes.ok) {
         data = await statusRes.json();
       }
@@ -703,7 +735,8 @@ export interface SavedInvitationSummary {
 }
 
 export async function listSavedInvitations(): Promise<SavedInvitationSummary[]> {
-  const res = await fetch(`${API_URL}/api/invitations`);
+  const res = await fetch(`${API_URL}/api/invitations`, { headers: authHeaders() });
+  if (res.status === 401) { handle401(); return []; }
   if (!res.ok) {
     throw new Error(`Failed to list invitations: ${res.statusText}`);
   }
@@ -711,7 +744,10 @@ export async function listSavedInvitations(): Promise<SavedInvitationSummary[]> 
 }
 
 export async function getSavedInvitation(invitationId: string): Promise<Invitation> {
-  const res = await fetch(`${API_URL}/api/invitations/${invitationId}`);
+  const res = await fetch(`${API_URL}/api/invitations/${invitationId}`, {
+    headers: authHeaders(),
+  });
+  if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }
   if (!res.ok) {
     throw new Error(`Failed to get invitation: ${res.statusText}`);
   }
@@ -733,7 +769,6 @@ export async function getSavedInvitation(invitationId: string): Promise<Invitati
     };
   }
 
-  // Fallback reconstruction for older invitations created before frontend_invitation storage
   const u = data.user_input || {};
   const bride = u.bride_name || '';
   const groom = u.groom_name || '';

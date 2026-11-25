@@ -1,10 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { COPY } from '../content/copy';
 import { SAMPLE_EXAMPLES } from '../content/examples';
 import type { AccountType } from '../types';
 import { SampleCard } from '../components/SampleCard';
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+          }) => void;
+          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+        };
+      };
+    };
+  }
+}
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 interface AuthPageProps {
   mode: 'login' | 'signup';
@@ -16,7 +34,9 @@ export function AuthPage({ mode }: AuthPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const fromPath =
-    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/dashboard';
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/editor';
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
+  const [googleReady, setGoogleReady] = useState(false);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -24,6 +44,60 @@ export function AuthPage({ mode }: AuthPageProps) {
   const [accountType, setAccountType] = useState<AccountType>('individual');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const isConfigured =
+      Boolean(GOOGLE_CLIENT_ID) && !GOOGLE_CLIENT_ID.includes('your_google_oauth_client_id');
+    if (!isConfigured) return;
+
+    let cancelled = false;
+    const initGoogle = () => {
+      const gsi = window.google?.accounts?.id;
+      if (!gsi || !googleBtnRef.current || cancelled) return false;
+      gsi.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          if (!response.credential) {
+            setError(COPY.auth.errors.googleAuth);
+            return;
+          }
+          setError(null);
+          setIsSubmitting(true);
+          try {
+            await loginWithGoogle(response.credential);
+            navigate(fromPath, { replace: true });
+          } catch (err) {
+            setError(err instanceof Error ? err.message : COPY.auth.errors.googleAuth);
+          } finally {
+            setIsSubmitting(false);
+          }
+        },
+      });
+      googleBtnRef.current.innerHTML = '';
+      gsi.renderButton(googleBtnRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: googleBtnRef.current.offsetWidth || 380,
+        text: 'continue_with',
+      });
+      setGoogleReady(true);
+      return true;
+    };
+
+    if (!initGoogle()) {
+      const timer = window.setInterval(() => {
+        if (initGoogle()) window.clearInterval(timer);
+      }, 250);
+      return () => {
+        cancelled = true;
+        window.clearInterval(timer);
+      };
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fromPath, loginWithGoogle, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,17 +137,8 @@ export function AuthPage({ mode }: AuthPageProps) {
     }
   };
 
-  const handleGoogle = async () => {
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await loginWithGoogle();
-      navigate(fromPath, { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : COPY.auth.errors.googleAuth);
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleGoogleFallback = () => {
+    setError('Google Sign-In is not configured yet. Set VITE_GOOGLE_CLIENT_ID in frontend/.env.');
   };
 
   return (
@@ -89,12 +154,14 @@ export function AuthPage({ mode }: AuthPageProps) {
               {isSignup ? COPY.auth.signupSubline : COPY.auth.loginSubline}
             </p>
 
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={handleGoogle}
-              className="mt-7 flex w-full items-center justify-center gap-3 rounded-lg border border-hairline bg-ivory px-4 py-3 text-sm font-medium text-peacock transition-colors hover:bg-ivory-soft disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock"
-            >
+            <div ref={googleBtnRef} className={googleReady ? 'mt-7 flex justify-center' : 'hidden'} />
+            {!googleReady && (
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleGoogleFallback}
+                className="mt-7 flex w-full items-center justify-center gap-3 rounded-lg border border-hairline bg-ivory px-4 py-3 text-sm font-medium text-peacock transition-colors hover:bg-ivory-soft disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock"
+              >
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="#4285F4"
@@ -113,8 +180,9 @@ export function AuthPage({ mode }: AuthPageProps) {
                   d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"
                 />
               </svg>
-              {COPY.auth.googleCta}
-            </button>
+                {COPY.auth.googleCta}
+              </button>
+            )}
 
             <div className="my-6 flex items-center gap-3 text-xs text-ink-muted">
               <span className="h-px flex-1 bg-hairline" />

@@ -114,32 +114,58 @@ export default function App() {
               <Route path="/contact" element={<ContactPage />} />
             </Route>
 
-            {/* Redirect /create to /editor/create */}
+            {/* Redirect /create and /dashboard to /editor */}
             <Route path="/create" element={<Navigate to="/editor/create" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/editor" replace />} />
 
-            {/* ── Existing Editor (not gated behind login) ── */}
+            {/* ── Editor (login required) ── */}
             <Route element={<EditorLayout />}>
-              <Route path="/editor" element={<DashboardScreen />} />
-              <Route path="/editor/create" element={<CreateTypeScreen />} />
+              <Route
+                path="/editor"
+                element={
+                  <ProtectedRoute>
+                    <DashboardScreen />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/editor/create"
+                element={
+                  <ProtectedRoute>
+                    <CreateTypeScreen />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/editor/create/details"
                 element={
-                  <DraftGuard>
-                    <DetailsFormScreen />
-                  </DraftGuard>
+                  <ProtectedRoute>
+                    <DraftGuard>
+                      <DetailsFormScreen />
+                    </DraftGuard>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/editor/create/design"
                 element={
-                  <DraftGuard>
-                    <DesignPreferencesScreen />
-                  </DraftGuard>
+                  <ProtectedRoute>
+                    <DraftGuard>
+                      <DesignPreferencesScreen />
+                    </DraftGuard>
+                  </ProtectedRoute>
                 }
               />
 
-              {/* Invitation routes — all loaded from backend via :id */}
-              <Route path="/invitation/:id" element={<InvitationLoader />}>
+              {/* Invitation routes — login required */}
+              <Route
+                path="/invitation/:id"
+                element={
+                  <ProtectedRoute>
+                    <InvitationLoader />
+                  </ProtectedRoute>
+                }
+              >
                 <Route path="generating" element={<GenerationProgressScreen />} />
                 <Route path="review"     element={<ImageReviewScreen />} />
                 <Route path="animation"  element={<AnimationPromptScreen />} />

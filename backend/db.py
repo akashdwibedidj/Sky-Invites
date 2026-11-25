@@ -28,10 +28,23 @@ load_dotenv(PROJECT_ENV_PATH, override=True)
 Base = declarative_base()
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String(64), primary_key=True)
+    email = Column(String(255), unique=True, nullable=False)
+    password_hash = Column(Text, nullable=True)
+    google_id = Column(String(128), unique=True, nullable=True)
+    name = Column(String(255), nullable=False)
+    account_type = Column(String(20), nullable=False, server_default="individual")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Invitation(Base):
     __tablename__ = "invitations"
 
     id = Column(String(64), primary_key=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     type = Column(String(50), nullable=True)
     user_input = Column(JSONB, nullable=False)
     style_bible = Column(JSONB, nullable=True)
@@ -97,11 +110,14 @@ def get_session():
 def create_tables() -> None:
     eng = _get_engine()
     Base.metadata.create_all(bind=eng)
-    # Idempotent migration for existing scenes tables
+    # Idempotent migrations
     with eng.begin() as conn:
+        # Plan 2: generation counters + analyzed flag
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS image_generations INTEGER NOT NULL DEFAULT 0"))
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS video_generations INTEGER NOT NULL DEFAULT 0"))
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS analyzed BOOLEAN NOT NULL DEFAULT FALSE"))
+        # Plan 4: user_id on invitations (nullable — existing rows stay NULL/orphaned)
+        conn.execute(text("ALTER TABLE invitations ADD COLUMN IF NOT EXISTS user_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL"))
         # Backfill counters for already-generated media
         conn.execute(text("UPDATE scenes SET image_generations = 1 WHERE image_path IS NOT NULL AND image_generations = 0"))
         conn.execute(text("UPDATE scenes SET video_generations = 1 WHERE video_path IS NOT NULL AND video_generations = 0"))

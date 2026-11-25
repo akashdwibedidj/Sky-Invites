@@ -11,3 +11,7 @@ sqlalchemy
 psycopg[binary]
 fastapi
 uvicorn
+PyJWT
+argon2-cffi
+google-auth
+slowapi

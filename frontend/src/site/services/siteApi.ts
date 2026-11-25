@@ -1,24 +1,11 @@
 /**
- * Sky Invites API Service
- * =======================
- * Currently configured with USE_MOCK = true so the frontend runs standalone.
- *
- * When connecting to your FastAPI backend (default http://localhost:8000):
- * 1. Set VITE_API_URL in your .env file (e.g. VITE_API_URL=http://localhost:8000).
- * 2. Flip USE_MOCK below from `true` to `false`.
- * 3. Ensure your backend implements these endpoints:
- *    - joinWaitlist         -> POST /api/waitlist
- *    - signup               -> POST /api/auth/signup
- *    - login                -> POST /api/auth/login
- *    - googleLogin          -> POST /api/auth/google
- *    - getMe                -> GET  /api/auth/me
- *    - listMyInvitations    -> GET  /api/invitations
- *    - sendContactMessage   -> POST /api/contact
- *    - sendBusinessEnquiry  -> POST /api/business/enquiry
+ * Sky Invites Site API Service
+ * USE_MOCK = true only for waitlist, contact, and business enquiry.
+ * Auth and invitation listing are real (Plan 4).
  */
 
 import { COPY } from '../content/copy';
-import { MOCK_INVITATIONS, MOCK_USER } from '../mock/data';
+import { MOCK_INVITATIONS } from '../mock/data';
 import type {
   AuthResponse,
   BusinessEnquiryRequest,
@@ -33,8 +20,6 @@ import type {
   WaitlistRequest,
   WaitlistResponse,
 } from '../types';
-
-export const USE_MOCK = true;
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 const TOKEN_STORAGE_KEY = 'sky_invites_token';
@@ -68,6 +53,15 @@ export function getAuthToken(): string | null {
   return null;
 }
 
+/** Clears token and redirects to /login (global 401 handler). */
+function handleUnauthorized(path: string): void {
+  // Don't redirect when already on auth pages
+  const authPaths = ['/login', '/signup'];
+  if (authPaths.some((p) => window.location.pathname.startsWith(p))) return;
+  setAuthToken(null);
+  window.location.replace('/login?session=expired');
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getAuthToken();
   const headers: Record<string, string> = {
@@ -83,6 +77,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
     headers,
   });
+
+  // Global 401 handler — skip for auth endpoints themselves
+  if (response.status === 401) {
+    const authEndpoints = ['/api/auth/login', '/api/auth/signup', '/api/auth/google'];
+    const isAuthEndpoint = authEndpoints.some((ep) => path.startsWith(ep));
+    if (!isAuthEndpoint) {
+      handleUnauthorized(path);
+      // Throw so callers see an error
+      throw new Error('Session expired. Please log in again.');
+    }
+  }
 
   const contentType = response.headers.get('content-type') || '';
   const data = contentType.includes('application/json')
@@ -104,37 +109,9 @@ function mockDelay(ms = 450): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function joinWaitlist(payload: WaitlistRequest): Promise<WaitlistResponse> {
-  if (USE_MOCK) {
-    await mockDelay(500);
-    return {
-      success: true,
-      message: COPY.home.waitlist.successMessage,
-    };
-  }
-
-  return request<WaitlistResponse>('/api/waitlist', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
+// ── Auth — REAL (USE_MOCK = false for these) ──────────────────────────────────
 
 export async function signup(payload: SignupRequest): Promise<AuthResponse> {
-  if (USE_MOCK) {
-    await mockDelay(500);
-    const token = 'mock_jwt_sky_invites_' + Date.now();
-    return {
-      access_token: token,
-      token_type: 'bearer',
-      user: {
-        id: 'usr_' + Date.now(),
-        name: payload.name.trim() || 'Guest Host',
-        email: payload.email.trim(),
-        accountType: payload.accountType || 'individual',
-      },
-    };
-  }
-
   return request<AuthResponse>('/api/auth/signup', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -142,22 +119,6 @@ export async function signup(payload: SignupRequest): Promise<AuthResponse> {
 }
 
 export async function login(payload: LoginRequest): Promise<AuthResponse> {
-  if (USE_MOCK) {
-    await mockDelay(450);
-    if (!payload.email.includes('@') || payload.password.length < 6) {
-      throw new Error(COPY.auth.errors.genericAuth);
-    }
-    const token = 'mock_jwt_sky_invites_' + Date.now();
-    return {
-      access_token: token,
-      token_type: 'bearer',
-      user: {
-        ...MOCK_USER,
-        email: payload.email.trim(),
-      },
-    };
-  }
-
   return request<AuthResponse>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -165,16 +126,6 @@ export async function login(payload: LoginRequest): Promise<AuthResponse> {
 }
 
 export async function googleLogin(payload: GoogleAuthRequest = {}): Promise<AuthResponse> {
-  if (USE_MOCK) {
-    await mockDelay(450);
-    const token = 'mock_google_jwt_sky_invites_' + Date.now();
-    return {
-      access_token: token,
-      token_type: 'bearer',
-      user: MOCK_USER,
-    };
-  }
-
   return request<AuthResponse>('/api/auth/google', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -182,57 +133,41 @@ export async function googleLogin(payload: GoogleAuthRequest = {}): Promise<Auth
 }
 
 export async function getMe(): Promise<User> {
-  if (USE_MOCK) {
-    await mockDelay(200);
-    return MOCK_USER;
-  }
-
   return request<User>('/api/auth/me', {
     method: 'GET',
   });
 }
 
 export async function listMyInvitations(): Promise<ListInvitationsResponse> {
-  if (USE_MOCK) {
-    await mockDelay(350);
-    return {
-      items: MOCK_INVITATIONS,
-    };
-  }
-
   return request<ListInvitationsResponse>('/api/invitations', {
     method: 'GET',
   });
 }
 
-export async function sendContactMessage(payload: ContactRequest): Promise<ContactResponse> {
-  if (USE_MOCK) {
-    await mockDelay(450);
-    return {
-      success: true,
-      message: COPY.contactPage.successMessage,
-    };
-  }
+// ── Still mocked (backends not yet built) ────────────────────────────────────
 
-  return request<ContactResponse>('/api/contact', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+export async function joinWaitlist(payload: WaitlistRequest): Promise<WaitlistResponse> {
+  await mockDelay(500);
+  return {
+    success: true,
+    message: COPY.home.waitlist.successMessage,
+  };
+}
+
+export async function sendContactMessage(payload: ContactRequest): Promise<ContactResponse> {
+  await mockDelay(450);
+  return {
+    success: true,
+    message: COPY.contactPage.successMessage,
+  };
 }
 
 export async function sendBusinessEnquiry(
   payload: BusinessEnquiryRequest,
 ): Promise<BusinessEnquiryResponse> {
-  if (USE_MOCK) {
-    await mockDelay(450);
-    return {
-      success: true,
-      message: COPY.businessPage.enquiry.successMessage,
-    };
-  }
-
-  return request<BusinessEnquiryResponse>('/api/business/enquiry', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  await mockDelay(450);
+  return {
+    success: true,
+    message: COPY.businessPage.enquiry.successMessage,
+  };
 }

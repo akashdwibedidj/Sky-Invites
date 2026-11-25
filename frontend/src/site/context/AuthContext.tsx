@@ -8,7 +8,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (payload: LoginRequest) => Promise<void>;
   signup: (payload: SignupRequest) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -66,8 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
-  const loginWithGoogle = useCallback(async () => {
-    const res = await api.googleLogin();
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const res = await api.googleLogin({ idToken });
     api.setAuthToken(res.access_token);
     setToken(res.access_token);
     setUser(res.user);

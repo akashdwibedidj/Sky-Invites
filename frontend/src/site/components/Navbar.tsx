@@ -6,9 +6,11 @@ import { COPY } from '../content/copy';
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const firstName = user?.name?.split(' ')[0] ?? '';
 
   const handleSectionLink = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
     e.preventDefault();
@@ -77,12 +79,21 @@ export function Navbar() {
         {/* Zone 3: Right side Login + Peacock Glass Create button */}
         <div className="flex items-center gap-4 shrink-0">
           {user ? (
-            <Link
-              to="/editor"
-              className="hidden md:inline-flex text-sm font-medium text-peacock/90 hover:text-peacock transition-colors duration-150 whitespace-nowrap shrink-0"
-            >
-              {COPY.nav.dashboard}
-            </Link>
+            <>
+              <Link
+                to="/editor"
+                className="hidden md:inline-flex text-sm font-medium text-peacock/90 hover:text-peacock transition-colors duration-150 whitespace-nowrap shrink-0"
+              >
+                {firstName}
+              </Link>
+              <button
+                type="button"
+                onClick={logout}
+                className="hidden md:inline-flex text-sm font-medium text-peacock/60 hover:text-peacock transition-colors duration-150 whitespace-nowrap shrink-0"
+              >
+                Log out
+              </button>
+            </>
           ) : (
             <Link
               to="/login"
@@ -139,9 +150,18 @@ export function Navbar() {
               {COPY.nav.faq}
             </a>
             {user ? (
-              <Link to="/editor" onClick={() => setMobileOpen(false)} className="py-1.5">
-                {COPY.nav.dashboard}
-              </Link>
+              <>
+                <Link to="/editor" onClick={() => setMobileOpen(false)} className="py-1.5">
+                  {firstName}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => { setMobileOpen(false); logout(); }}
+                  className="py-1.5 text-left text-peacock/70"
+                >
+                  Log out
+                </button>
+              </>
             ) : (
               <Link to="/login" onClick={() => setMobileOpen(false)} className="py-1.5">
                 {COPY.nav.login}
