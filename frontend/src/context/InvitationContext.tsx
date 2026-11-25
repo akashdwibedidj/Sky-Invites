@@ -16,29 +16,29 @@ import {
 
 export function screenRouteToPath(screen: ScreenRoute, invitationId?: string | null): string {
   switch (screen) {
-    case 'dashboard':       return '/';
-    case 'create-type':     return '/create';
-    case 'step-1-details':  return '/create/details';
-    case 'step-2-design':   return '/create/design';
-    case 'generating':      return invitationId ? `/invitation/${invitationId}/generating` : '/create';
-    case 'step-3-review':   return invitationId ? `/invitation/${invitationId}/review`     : '/';
-    case 'step-4-animation':return invitationId ? `/invitation/${invitationId}/animation`  : '/';
-    case 'step-5-compose':  return invitationId ? `/invitation/${invitationId}/compose`    : '/';
-    case 'step-6-export':   return invitationId ? `/invitation/${invitationId}/export`     : '/';
-    default:                return '/';
+    case 'dashboard':       return '/editor';
+    case 'create-type':     return '/editor/create';
+    case 'step-1-details':  return '/editor/create/details';
+    case 'step-2-design':   return '/editor/create/design';
+    case 'generating':      return invitationId ? `/invitation/${invitationId}/generating` : '/editor/create';
+    case 'step-3-review':   return invitationId ? `/invitation/${invitationId}/review`     : '/editor';
+    case 'step-4-animation':return invitationId ? `/invitation/${invitationId}/animation`  : '/editor';
+    case 'step-5-compose':  return invitationId ? `/invitation/${invitationId}/compose`    : '/editor';
+    case 'step-6-export':   return invitationId ? `/invitation/${invitationId}/export`     : '/editor';
+    default:                return '/editor';
   }
 }
 
 export function pathToScreenRoute(pathname: string): ScreenRoute {
-  if (pathname === '/' || pathname === '')               return 'dashboard';
-  if (pathname === '/create')                            return 'create-type';
-  if (pathname === '/create/details')                    return 'step-1-details';
-  if (pathname === '/create/design')                     return 'step-2-design';
-  if (/\/invitation\/[^/]+\/generating/.test(pathname))  return 'generating';
-  if (/\/invitation\/[^/]+\/review/.test(pathname))      return 'step-3-review';
-  if (/\/invitation\/[^/]+\/animation/.test(pathname))   return 'step-4-animation';
-  if (/\/invitation\/[^/]+\/compose/.test(pathname))     return 'step-5-compose';
-  if (/\/invitation\/[^/]+\/export/.test(pathname))      return 'step-6-export';
+  if (pathname === '/editor' || pathname === '/editor/')   return 'dashboard';
+  if (pathname === '/editor/create')                       return 'create-type';
+  if (pathname === '/editor/create/details')               return 'step-1-details';
+  if (pathname === '/editor/create/design')                return 'step-2-design';
+  if (/\/invitation\/[^/]+\/generating/.test(pathname))    return 'generating';
+  if (/\/invitation\/[^/]+\/review/.test(pathname))        return 'step-3-review';
+  if (/\/invitation\/[^/]+\/animation/.test(pathname))     return 'step-4-animation';
+  if (/\/invitation\/[^/]+\/compose/.test(pathname))       return 'step-5-compose';
+  if (/\/invitation\/[^/]+\/export/.test(pathname))        return 'step-6-export';
   return 'dashboard';
 }
 
@@ -120,7 +120,7 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const startNewInvitationFlow = useCallback(() => {
     setActiveInvitationId(null);
     setSelectedSceneId(null);
-    navigate('/create');
+    navigate('/editor/create');
   }, [navigate]);
 
   const createDraftFromType = useCallback(
@@ -129,7 +129,7 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setInvitations((prev) => [draft, ...prev]);
       setActiveInvitationId(draft.id);
       setSelectedSceneId(null);
-      navigate('/create/details');
+      navigate('/editor/create/details');
     },
     [navigate]
   );
@@ -263,7 +263,7 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setInvitations((prev) => prev.filter((inv) => inv.id !== id));
       if (activeInvitationId === id) {
         setActiveInvitationId(null);
-        navigate('/');
+        navigate('/editor');
       }
     },
     [activeInvitationId, navigate]
@@ -276,7 +276,7 @@ export const InvitationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const clearAllInvitations = useCallback(() => {
     setInvitations([]);
     setActiveInvitationId(null);
-    navigate('/');
+    navigate('/editor');
   }, [navigate]);
 
   const loadSavedInvitation = useCallback(

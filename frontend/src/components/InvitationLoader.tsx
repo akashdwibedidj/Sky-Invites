@@ -160,7 +160,7 @@ export const InvitationLoader: React.FC = () => {
         </p>
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/editor')}
           className="mt-2 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium hover:bg-[#A27644] transition-colors cursor-pointer"
         >
           ← Back to Dashboard
@@ -185,7 +185,7 @@ export const InvitationLoader: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/editor')}
             className="px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium hover:bg-[#A27644] transition-colors cursor-pointer"
           >
             Dashboard
