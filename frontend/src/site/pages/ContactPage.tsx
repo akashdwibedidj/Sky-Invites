@@ -12,6 +12,7 @@ export function ContactPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [website, setWebsite] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +37,7 @@ export function ContactPage() {
         reason,
         subject: subject.trim(),
         message: message.trim(),
+        website,
       });
       setSuccess(res.message);
       setName('');
@@ -75,6 +77,16 @@ export function ContactPage() {
 
         <div className="rounded-xl border border-peacock/15 bg-ivory-card/90 p-7 shadow-[var(--shadow-editorial)] backdrop-blur-md sm:p-10 lg:col-span-7">
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
+            <input
+              type="text"
+              name="website"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              aria-hidden="true"
+              tabIndex={-1}
+              autoComplete="off"
+              className="hidden"
+            />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="contact-name" className="block text-xs font-medium text-peacock">

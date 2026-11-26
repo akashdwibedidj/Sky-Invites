@@ -124,6 +124,7 @@ export interface WaitlistRequest {
   email: string;
   whatsapp?: string;
   eventType: InvitationCategory;
+  website?: string;
 }
 
 export interface WaitlistResponse {
@@ -164,6 +165,7 @@ export interface ContactRequest {
   reason?: string;
   subject: string;
   message: string;
+  website?: string;
 }
 
 export interface ContactResponse {
@@ -179,6 +181,7 @@ export interface BusinessEnquiryRequest {
   businessType: BusinessTypeOption;
   monthlyVolume: MonthlyVolumeOption;
   message: string;
+  website?: string;
 }
 
 export interface BusinessEnquiryResponse {

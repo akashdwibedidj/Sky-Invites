@@ -58,7 +58,7 @@ export function HomePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState<string | null>(null);
-  const [waitlistCount, setWaitlistCount] = useState<number | null>(WAITLIST_INITIAL_COUNT);
+  const [website, setWebsite] = useState('');
 
   const galleryScrollRef = useRef<HTMLDivElement>(null);
   const waitlistRef = useRef<HTMLElement>(null);
@@ -112,11 +112,9 @@ export function HomePage() {
         email: email.trim(),
         whatsapp: whatsapp.trim() || undefined,
         eventType,
+        website,
       });
       setWaitlistSuccess(response.message);
-      if (typeof response.position === 'number' && response.position > 0) {
-        setWaitlistCount(response.position);
-      }
       setName('');
       setEmail('');
       setWhatsapp('');
@@ -465,14 +463,19 @@ export function HomePage() {
               <p className="mt-3 text-sm text-ink-muted sm:text-base">
                 {COPY.home.waitlist.subline}
               </p>
-              {waitlistCount !== null && waitlistCount > 0 && (
-                <p className="mt-3 text-xs font-medium text-peacock tabular-nums">
-                  {waitlistCount.toLocaleString()} families on the waitlist
-                </p>
-              )}
             </div>
 
             <form onSubmit={handleWaitlistSubmit} noValidate className="mx-auto mt-8 max-w-xl space-y-4">
+              <input
+                type="text"
+                name="website"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                aria-hidden="true"
+                tabIndex={-1}
+                autoComplete="off"
+                className="hidden"
+              />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="waitlist-name" className="block text-xs font-medium text-peacock">

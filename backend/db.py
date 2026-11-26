@@ -114,6 +114,43 @@ _engine = None
 _SessionLocal = None
 
 
+class Waitlist(Base):
+    __tablename__ = "waitlist"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False)
+    email = Column(String(254), nullable=False)
+    whatsapp = Column(String(32), nullable=True)
+    event_type = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ContactMessage(Base):
+    __tablename__ = "contact_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False)
+    email = Column(String(254), nullable=False)
+    reason = Column(String(120), nullable=True)
+    subject = Column(String(200), nullable=True)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class BusinessEnquiry(Base):
+    __tablename__ = "business_enquiries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    business_name = Column(String(200), nullable=False)
+    contact_name = Column(String(200), nullable=False)
+    email = Column(String(254), nullable=False)
+    whatsapp = Column(String(32), nullable=True)
+    business_type = Column(String(100), nullable=False)
+    volume_per_month = Column(String(100), nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 def _get_engine():
     global _engine, _SessionLocal
     if _engine is None:
@@ -153,6 +190,8 @@ def create_tables() -> None:
         # Credits & ledger: spend reference & timeout tracking on scenes
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS last_spend_ref VARCHAR(128)"))
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS generating_started_at TIMESTAMPTZ"))
+        # Leads: unique index on lowercase waitlist email (idempotent)
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_waitlist_email_lower ON waitlist (LOWER(email))"))
         # Payments: unique index on gateway_order_id (idempotent)
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_gateway_order_id ON orders (gateway_order_id) WHERE gateway_order_id IS NOT NULL"))
         # One-time idempotent free grant backfill for existing users

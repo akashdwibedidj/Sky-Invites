@@ -36,6 +36,7 @@ export function BusinessPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [website, setWebsite] = useState('');
 
   const scrollToEnquiry = () => {
     enquirySectionRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -71,6 +72,7 @@ export function BusinessPage() {
         businessType,
         monthlyVolume,
         message: message.trim(),
+        website,
       });
       setSuccess(response.message);
       setBusinessName('');
@@ -306,6 +308,16 @@ export function BusinessPage() {
             </div>
 
             <form onSubmit={handleSubmit} noValidate className="mx-auto mt-8 max-w-xl space-y-4">
+              <input
+                type="text"
+                name="website"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                aria-hidden="true"
+                tabIndex={-1}
+                autoComplete="off"
+                className="hidden"
+              />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="biz-name" className="block text-xs font-medium text-peacock">

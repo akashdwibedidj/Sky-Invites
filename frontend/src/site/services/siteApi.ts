@@ -95,6 +95,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     : await response.text().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error('Too many requests. Please wait a moment and try again.');
+    }
     const message =
       (data && typeof data === 'object' && ('detail' in data ? data.detail : data.message)) ||
       (typeof data === 'string' && data) ||
@@ -144,30 +147,27 @@ export async function listMyInvitations(): Promise<ListInvitationsResponse> {
   });
 }
 
-// ── Still mocked (backends not yet built) ────────────────────────────────────
+// ── Lead capture — REAL ───────────────────────────────────────────────────────
 
 export async function joinWaitlist(payload: WaitlistRequest): Promise<WaitlistResponse> {
-  await mockDelay(500);
-  return {
-    success: true,
-    message: COPY.home.waitlist.successMessage,
-  };
+  return request<WaitlistResponse>('/api/waitlist', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function sendContactMessage(payload: ContactRequest): Promise<ContactResponse> {
-  await mockDelay(450);
-  return {
-    success: true,
-    message: COPY.contactPage.successMessage,
-  };
+  return request<ContactResponse>('/api/contact', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function sendBusinessEnquiry(
   payload: BusinessEnquiryRequest,
 ): Promise<BusinessEnquiryResponse> {
-  await mockDelay(450);
-  return {
-    success: true,
-    message: COPY.businessPage.enquiry.successMessage,
-  };
+  return request<BusinessEnquiryResponse>('/api/business/enquiry', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
