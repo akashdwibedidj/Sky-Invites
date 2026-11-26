@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, CircleDashed, Loader2, RotateCcw, Sparkles } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
-import { createScenes, generateImages, regenerateImage } from '../services/api';
+import { ApiError, createScenes, generateImages, regenerateImage } from '../services/api';
+import { useAuth } from '../site/context/AuthContext';
+import { InsufficientCreditsBanner } from './InsufficientCreditsBanner';
 import { AgentPipelineNode, Scene } from '../types/invitation';
 
 const INITIAL_NODES: AgentPipelineNode[] = [
@@ -61,6 +63,11 @@ const NodeStatusIcon: React.FC<{ status: AgentPipelineNode['status'] }> = ({ sta
 };
 
 export const GenerationProgressScreen: React.FC = () => {
+  const { refreshCredits } = useAuth();
+  const [insufficientCredits, setInsufficientCredits] = useState<{
+    needed?: number;
+    available?: number;
+  } | null>(null);
   const { activeInvitation, setActiveScenes, updateScene, updateActiveStatus, navigateTo } = useInvitations();
   const [nodes, setNodes] = useState<AgentPipelineNode[]>(INITIAL_NODES);
   const [sceneChips, setSceneChips] = useState<Scene[]>([]);
@@ -240,12 +247,18 @@ export const GenerationProgressScreen: React.FC = () => {
           }
         }
       } catch (err: any) {
+        if (err instanceof ApiError && (err.status === 402 || err.code === 'INSUFFICIENT_CREDITS')) {
+          setInsufficientCredits({});
+          return;
+        }
         console.error('Pipeline failed:', err);
         updateNode(
           'scene-splitter',
           'running',
           `Failed: ${err?.message || 'Error occurred during generation'}`
         );
+      } finally {
+        void refreshCredits();
       }
     };
 

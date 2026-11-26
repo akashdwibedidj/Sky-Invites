@@ -18,6 +18,8 @@ import {
 import { useInvitations } from '../context/InvitationContext';
 import { GOOGLE_FONT_OPTIONS } from '../data/mockInvitations';
 import { ApiError, editImageWithInstruction, patchScene, regenerateImage } from '../services/api';
+import { useAuth } from '../site/context/AuthContext';
+import { InsufficientCreditsBanner } from './InsufficientCreditsBanner';
 import { TextAlignment, TextLayer, TextLine, TextPlacement } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
 
@@ -68,20 +70,32 @@ export const ImageReviewScreen: React.FC = () => {
   const regenLimitReached = imageGenerations >= maxImageGenerations;
   const isImageBusy = isRegenerating || isEditingImage || activeScene.imageStatus === 'generating';
 
+  const { refreshCredits } = useAuth();
+  const [insufficientCredits, setInsufficientCredits] = useState<{
+    needed?: number;
+    available?: number;
+  } | null>(null);
+
   const handleRegenerate = async () => {
     if (regenLimitReached || isImageBusy) return;
     setImageError(null);
+    setInsufficientCredits(null);
     setIsRegenerating(true);
     try {
       const updated = await regenerateImage(activeScene, activeScene.imagePrompt);
       updateScene(activeScene.id, () => updated);
     } catch (err: any) {
-      if (err instanceof ApiError && err.code === 'LIMIT_REACHED') {
-        updateScene(activeScene.id, (sc) => ({ ...sc, imageGenerations: maxImageGenerations }));
+      if (err instanceof ApiError && (err.status === 402 || err.code === 'INSUFFICIENT_CREDITS')) {
+        setInsufficientCredits({});
+      } else {
+        if (err instanceof ApiError && err.code === 'LIMIT_REACHED') {
+          updateScene(activeScene.id, (sc) => ({ ...sc, imageGenerations: maxImageGenerations }));
+        }
+        setImageError(err?.message || 'Unable to regenerate image.');
       }
-      setImageError(err?.message || 'Unable to regenerate image.');
     } finally {
       setIsRegenerating(false);
+      void refreshCredits();
     }
   };
 
@@ -536,8 +550,17 @@ export const ImageReviewScreen: React.FC = () => {
                 className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-stone-800 bg-[var(--color-ivory-soft)] hover:bg-[#F2E9D7] border border-[var(--color-hairline)] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                <span>{regenLimitReached ? 'Regeneration used' : 'Regenerate image'}</span>
+                <span>{regenLimitReached ? 'Regeneration used' : 'Regenerate image · Free regeneration'}</span>
               </button>
+              {insufficientCredits && (
+                <div className="mt-3">
+                  <InsufficientCreditsBanner
+                    needed={insufficientCredits.needed}
+                    available={insufficientCredits.available}
+                    creditType="image"
+                  />
+                </div>
+              )}
               {regenLimitReached && (
                 <span className="text-[11px] text-stone-500">
                   1 of 1 regeneration used for this card

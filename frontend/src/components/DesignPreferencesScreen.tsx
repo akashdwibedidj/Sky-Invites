@@ -564,15 +564,20 @@ export const DesignPreferencesScreen: React.FC = () => {
             <span>Back to Details</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => navigateTo(hasGeneratedImages ? 'step-3-review' : 'generating')}
-            className="inline-flex items-center gap-2.5 px-7 py-3.5 text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl shadow-sm transition-colors cursor-pointer"
-          >
-            {!hasGeneratedImages && <Sparkles className="w-4 h-4" />}
-            <span>{hasGeneratedImages ? 'Back to Review' : 'Generate Invitation'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {!hasGeneratedImages && (
+              <span className="text-xs text-stone-500">1 image credit per card</span>
+            )}
+            <button
+              type="button"
+              onClick={() => navigateTo(hasGeneratedImages ? 'step-3-review' : 'generating')}
+              className="inline-flex items-center gap-2.5 px-7 py-3.5 text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl shadow-sm transition-colors cursor-pointer"
+            >
+              {!hasGeneratedImages && <Sparkles className="w-4 h-4" />}
+              <span>{hasGeneratedImages ? 'Back to Review' : 'Generate Invitation'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </main>

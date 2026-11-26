@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
 import { ApiError, analyzeImage, generateVideo, patchScene } from '../services/api';
+import { useAuth } from '../site/context/AuthContext';
+import { InsufficientCreditsBanner } from './InsufficientCreditsBanner';
 import { CameraMovement, Scene } from '../types/invitation';
 import { PhoneFrame } from './PhoneFrame';
 
@@ -87,11 +89,18 @@ export const AnimationPromptScreen: React.FC = () => {
     }
   };
 
+  const { refreshCredits } = useAuth();
+  const [insufficientCredits, setInsufficientCredits] = useState<{
+    needed?: number;
+    available?: number;
+  } | null>(null);
+
   const handleGenerateOneVideo = async (sc: Scene) => {
     const vGen = sc.videoGenerations ?? (sc.videoUrl ? 1 : 0);
     const vMax = sc.maxVideoGenerations ?? 1;
     if (vGen >= vMax) return;
     setVideoError(null);
+    setInsufficientCredits(null);
     try {
       const updated = await generateVideo(sc, (sceneId, status, progress) => {
         updateSceneAnimationPlan(sceneId, (prev) => ({
@@ -102,6 +111,10 @@ export const AnimationPromptScreen: React.FC = () => {
       });
       updateScene(sc.id, () => updated);
     } catch (err: any) {
+      if (err instanceof ApiError && (err.status === 402 || err.code === 'INSUFFICIENT_CREDITS')) {
+        setInsufficientCredits({});
+        return;
+      }
       if (err instanceof ApiError && err.code === 'LIMIT_REACHED') {
         updateScene(sc.id, (prev) => ({ ...prev, videoGenerations: vMax }));
         setVideoError(err.message);
@@ -117,6 +130,8 @@ export const AnimationPromptScreen: React.FC = () => {
         videoStatus: 'failed',
         videoProgress: 0,
       }));
+    } finally {
+      void refreshCredits();
     }
   };
 
@@ -173,8 +188,17 @@ export const AnimationPromptScreen: React.FC = () => {
             ) : (
               <Video className="w-4 h-4" />
             )}
-            <span>{allVideosLimitReached ? 'All videos generated' : 'Generate videos'}</span>
+            <span>{allVideosLimitReached ? 'All videos generated' : 'Generate videos · 1 video credit per card'}</span>
           </button>
+          {insufficientCredits && (
+            <div className="mt-3">
+              <InsufficientCreditsBanner
+                needed={insufficientCredits.needed}
+                available={insufficientCredits.available}
+                creditType="video"
+              />
+            </div>
+          )}
 
           {allVideosDone && (
             <button

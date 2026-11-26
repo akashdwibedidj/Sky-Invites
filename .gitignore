@@ -8,3 +8,7 @@ node_modules/
 media/
 backend/assets/fonts/
 sky-shell/
+
+# Database backups
+backend/backups/
+*.sql
