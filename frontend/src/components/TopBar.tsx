@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Check, Plus } from 'lucide-react';
+import { ArrowLeft, Check, Plus, Sparkles } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
+import { useAuth } from '../site/context/AuthContext';
 import { ScreenRoute } from '../types/invitation';
 
 const WORKFLOW_STAGES: {
@@ -40,6 +41,7 @@ function getActiveStepNumber(screen: ScreenRoute): number {
 
 export const TopBar: React.FC = () => {
   const { currentScreen, activeInvitation, navigateTo, startNewInvitationFlow } = useInvitations();
+  const { credits } = useAuth();
   const isWorkflow = currentScreen !== 'dashboard';
   const activeStep = getActiveStepNumber(currentScreen);
   const hasScenes = (activeInvitation?.scenes.length ?? 0) > 0;
@@ -135,6 +137,19 @@ export const TopBar: React.FC = () => {
               <Plus className="w-4 h-4" />
               <span>Create New Invitation</span>
             </button>
+          )}
+          {credits && (
+            <Link
+              to="/pricing"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-medium transition-colors whitespace-nowrap"
+              title="View credits & plans"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--color-peacock)]" />
+              <span>
+                {credits.image} {credits.image === 1 ? 'image' : 'images'}, {credits.video}{' '}
+                {credits.video === 1 ? 'video' : 'videos'}
+              </span>
+            </Link>
           )}
         </div>
       </div>

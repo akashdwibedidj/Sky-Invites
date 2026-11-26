@@ -1,11 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as api from '../services/siteApi';
+import { fetchCredits, type CreditBalances } from '../../services/creditsApi';
 import type { LoginRequest, SignupRequest, User } from '../types';
 
 interface AuthContextValue {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  credits: CreditBalances | null;
+  refreshCredits: () => Promise<void>;
   login: (payload: LoginRequest) => Promise<void>;
   signup: (payload: SignupRequest) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
@@ -18,6 +21,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => api.getAuthToken());
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(() => Boolean(api.getAuthToken()));
+  const [credits, setCredits] = useState<CreditBalances | null>(null);
+
+  const refreshCredits = useCallback(async () => {
+    if (!api.getAuthToken()) {
+      setCredits(null);
+      return;
+    }
+    try {
+      const res = await fetchCredits();
+      setCredits(res.balances);
+    } catch {
+      // ignore transient errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && token) {
+      void refreshCredits();
+    } else {
+      setCredits(null);
+    }
+  }, [user, token, refreshCredits]);
 
   useEffect(() => {
     let active = true;
@@ -77,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
     setToken(null);
     setUser(null);
+    setCredits(null);
   }, []);
 
   return (
@@ -85,6 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isLoading,
+        credits,
+        refreshCredits,
         login,
         signup,
         loginWithGoogle,

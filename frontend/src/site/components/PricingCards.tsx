@@ -95,14 +95,14 @@ export function PricingCards({ onNotifyClick, tiers = PRICING_TIERS }: PricingCa
               {tier.comingSoon ? (
                 <button
                   type="button"
-                  onClick={onNotifyClick}
-                  className={`w-full px-5 py-3 text-sm font-medium whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 ${
+                  disabled
+                  className={`w-full px-5 py-3 text-sm font-medium whitespace-nowrap opacity-60 cursor-not-allowed ${
                     isHighlighted
-                      ? 'btn-glass-light focus-visible:ring-ivory'
-                      : 'btn-glass-peacock focus-visible:ring-peacock'
+                      ? 'btn-glass-light'
+                      : 'btn-glass-peacock'
                   }`}
                 >
-                  {tier.ctaLabel}
+                  Coming soon
                 </button>
               ) : (
                 <Link

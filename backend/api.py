@@ -89,6 +89,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.on_event("startup")
 def _on_startup() -> None:
     create_tables()
+    from credits import sweep_stuck_generating_scenes
+    sweep_stuck_generating_scenes()
 
 # ── CORS ───────────────────────────────────────────────────────────────────────
 _raw_origins = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000,http://127.0.0.1:3000")
@@ -418,11 +420,18 @@ def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
         inv_input = st["input"]
         bible = st["style_bible"]
 
+        from pricing_config import IMAGE_INITIAL_COST
+
         scenes_to_generate = []
         for s in scenes:
             if s.get("image_path"):
                 continue
-            claimed, _, _, _ = try_claim_initial_image_generation(invitation_id, s["scene_index"])
+            claimed, _, _, _ = try_claim_initial_image_generation(
+                invitation_id,
+                s["scene_index"],
+                user_id=st.get("user_id"),
+                credit_cost=IMAGE_INITIAL_COST,
+            )
             if claimed:
                 scenes_to_generate.append(s)
 
@@ -690,11 +699,32 @@ def generate_images_endpoint(
     req: GenerateImagesRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> Any:
+    from credits import get_balances
+    from db import get_session
+    from pricing_config import IMAGE_INITIAL_COST
+
     st = _load_and_assert_owner(req.invitation_id, current_user)
     scenes = st.get("scenes", [])
     if scenes and all(s.get("image_path") for s in scenes):
         return {"invitation_id": req.invitation_id, "status": "done", "existing": True}
+
+    pending_count = sum(1 for s in scenes if not s.get("image_path") and s.get("status") != "generating")
+    needed = pending_count * IMAGE_INITIAL_COST
+    if needed > 0:
+        with get_session() as session:
+            available = get_balances(session, current_user.id).get("image", 0)
+        if available < needed:
+            return JSONResponse(
+                status_code=402,
+                content={
+                    "code": "INSUFFICIENT_CREDITS",
+                    "credit_type": "image",
+                    "needed": needed,
+                    "available": available,
+                    "detail": f"Need {needed} image credit(s), have {available}.",
+                },
+            )
 
     background_tasks.add_task(run_generate_images_task, req.invitation_id, req.story_driven)
     return {"invitation_id": req.invitation_id, "status": "running"}
@@ -706,13 +736,19 @@ def regenerate_image_endpoint(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ) -> Any:
+    from pricing_config import IMAGE_REGENERATION_COST
+
     st = _load_and_assert_owner(req.invitation_id, current_user)
     scene = next((s for s in st["scenes"] if s["scene_index"] == req.scene_index), None)
     if not scene:
         raise HTTPException(status_code=404, detail=f"Card {req.scene_index + 1} not found")
 
     claimed, http_status_code, err_code, detail = try_claim_image_regeneration(
-        req.invitation_id, req.scene_index, MAX_IMAGE_GENERATIONS_PER_SCENE
+        req.invitation_id,
+        req.scene_index,
+        MAX_IMAGE_GENERATIONS_PER_SCENE,
+        user_id=current_user.id,
+        credit_cost=IMAGE_REGENERATION_COST,
     )
     if not claimed:
         return JSONResponse(status_code=http_status_code, content={"code": err_code, "detail": detail})
@@ -758,15 +794,53 @@ def generate_video_endpoint(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ) -> Any:
+    from pricing_config import VIDEO_INITIAL_COST
+
     _load_and_assert_owner(req.invitation_id, current_user)
     claimed, http_status_code, err_code, detail = try_claim_video_generation(
-        req.invitation_id, req.scene_index, MAX_VIDEO_GENERATIONS_PER_SCENE
+        req.invitation_id,
+        req.scene_index,
+        MAX_VIDEO_GENERATIONS_PER_SCENE,
+        user_id=current_user.id,
+        credit_cost=VIDEO_INITIAL_COST,
     )
     if not claimed:
         return JSONResponse(status_code=http_status_code, content={"code": err_code, "detail": detail})
 
     background_tasks.add_task(run_generate_video_task, req.invitation_id, req.scene_index)
     return {"invitation_id": req.invitation_id, "scene_index": req.scene_index, "status": "queued"}
+
+
+@app.get("/api/credits")
+def get_credits_endpoint(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
+    from credits import get_user_credits_summary
+    return get_user_credits_summary(current_user.id)
+
+
+@app.get("/api/plans")
+def get_plans_endpoint() -> dict[str, Any]:
+    from pricing_config import (
+        CREDITS_EXPIRE,
+        FREE_TIER_CREDITS,
+        IMAGE_FREE_REGENERATIONS_PER_CARD,
+        IMAGE_INITIAL_COST,
+        IMAGE_REGENERATION_COST,
+        PLANS,
+        UNIT_PRICES_PAISE,
+        VIDEO_INITIAL_COST,
+    )
+    return {
+        "plans": PLANS,
+        "unit_prices_paise": UNIT_PRICES_PAISE,
+        "free_tier_credits": FREE_TIER_CREDITS,
+        "credits_expire": CREDITS_EXPIRE,
+        "rules": {
+            "image_initial_cost": IMAGE_INITIAL_COST,
+            "image_free_regenerations_per_card": IMAGE_FREE_REGENERATIONS_PER_CARD,
+            "image_regeneration_cost": IMAGE_REGENERATION_COST,
+            "video_initial_cost": VIDEO_INITIAL_COST,
+        },
+    }
 
 
 @app.get("/api/invitations/{invitation_id}/status")

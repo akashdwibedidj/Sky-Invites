@@ -96,6 +96,8 @@ def _user_out(user: "User") -> UserOut:
 
 
 def _auth_response(user: "User") -> AuthResponse:
+    from credits import grant_free_tier_credits
+    grant_free_tier_credits(user.id)
     token = create_access_token(user.id)
     return AuthResponse(access_token=token, user=_user_out(user))
 

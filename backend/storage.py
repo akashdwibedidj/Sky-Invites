@@ -201,27 +201,54 @@ def update_scene(invitation_id: str, scene_index: int, **fields) -> None:
 
 
 def try_claim_initial_image_generation(
-    invitation_id: str, scene_index: int
+    invitation_id: str,
+    scene_index: int,
+    user_id: str | None = None,
+    credit_cost: int = 0,
 ) -> tuple[bool, int, str | None, str | None]:
     """
-    Atomically claim the initial image generation slot (only when image_generations = 0
-    and status != 'generating' and image_path IS NULL).
+    Atomically lock user FOR UPDATE, claim the initial image generation slot,
+    check balance, and insert spend ledger row in ONE transaction.
     Returns (claimed, http_status, error_code, detail).
     """
+    import uuid
+    from credits import InsufficientCreditsError, lock_user_and_spend
+    from db import User
+
     with get_session() as session:
+        if user_id and credit_cost > 0:
+            session.query(User).filter(User.id == user_id).with_for_update().one()
+
+        spend_ref = f"spend:img:{invitation_id}:{scene_index}:{uuid.uuid4().hex[:12]}" if (user_id and credit_cost > 0) else None
         row = session.execute(
             text(
                 "UPDATE scenes "
-                "SET image_generations = image_generations + 1, status = 'generating' "
+                "SET image_generations = image_generations + 1, status = 'generating', "
+                "    last_spend_ref = :spend_ref, generating_started_at = NOW() "
                 "WHERE invitation_id = :inv_id AND scene_index = :idx "
                 "AND image_generations = 0 "
                 "AND COALESCE(status, 'pending') != 'generating' "
                 "AND image_path IS NULL "
                 "RETURNING image_generations"
             ),
-            {"inv_id": invitation_id, "idx": scene_index},
+            {"inv_id": invitation_id, "idx": scene_index, "spend_ref": spend_ref},
         ).first()
         if row:
+            if user_id and credit_cost > 0 and spend_ref:
+                try:
+                    lock_user_and_spend(
+                        session,
+                        user_id=user_id,
+                        credit_type="image",
+                        cost=credit_cost,
+                        reference_id=spend_ref,
+                        invitation_id=invitation_id,
+                        scene_index=scene_index,
+                        note=f"Card {scene_index + 1} image generation",
+                    )
+                except InsufficientCreditsError as exc:
+                    session.rollback()
+                    return False, 402, "INSUFFICIENT_CREDITS", f"Need {exc.needed} image credit(s), have {exc.available}."
             return True, 200, None, None
 
         existing = session.execute(
@@ -241,27 +268,54 @@ def try_claim_initial_image_generation(
 
 
 def try_claim_image_regeneration(
-    invitation_id: str, scene_index: int, max_limit: int
+    invitation_id: str,
+    scene_index: int,
+    max_limit: int,
+    user_id: str | None = None,
+    credit_cost: int = 0,
 ) -> tuple[bool, int, str | None, str | None]:
     """
     Atomically claim an image regeneration slot (only when 1 <= image_generations < max_limit
-    and status != 'generating').
-    Returns (claimed, http_status, error_code, detail).
+    and status != 'generating'). Charges credit_cost if > 0.
     """
+    import uuid
+    from credits import InsufficientCreditsError, lock_user_and_spend
+    from db import User
+
     with get_session() as session:
+        if user_id and credit_cost > 0:
+            session.query(User).filter(User.id == user_id).with_for_update().one()
+
+        spend_ref = f"spend:regen:{invitation_id}:{scene_index}:{uuid.uuid4().hex[:12]}" if (user_id and credit_cost > 0) else None
         row = session.execute(
             text(
                 "UPDATE scenes "
-                "SET image_generations = image_generations + 1, status = 'generating' "
+                "SET image_generations = image_generations + 1, status = 'generating', "
+                "    last_spend_ref = :spend_ref, generating_started_at = NOW() "
                 "WHERE invitation_id = :inv_id AND scene_index = :idx "
                 "AND image_generations >= 1 "
                 "AND image_generations < :max_limit "
                 "AND COALESCE(status, 'pending') != 'generating' "
                 "RETURNING image_generations"
             ),
-            {"inv_id": invitation_id, "idx": scene_index, "max_limit": max_limit},
+            {"inv_id": invitation_id, "idx": scene_index, "max_limit": max_limit, "spend_ref": spend_ref},
         ).first()
         if row:
+            if user_id and credit_cost > 0 and spend_ref:
+                try:
+                    lock_user_and_spend(
+                        session,
+                        user_id=user_id,
+                        credit_type="image",
+                        cost=credit_cost,
+                        reference_id=spend_ref,
+                        invitation_id=invitation_id,
+                        scene_index=scene_index,
+                        note=f"Card {scene_index + 1} image regeneration",
+                    )
+                except InsufficientCreditsError as exc:
+                    session.rollback()
+                    return False, 402, "INSUFFICIENT_CREDITS", f"Need {exc.needed} image credit(s), have {exc.available}."
             return True, 200, None, None
 
         existing = session.execute(
@@ -283,54 +337,90 @@ def try_claim_image_regeneration(
 def release_image_generation(
     invitation_id: str, scene_index: int, restore_status: str = "failed"
 ) -> None:
-    """Refund 1 image_generations count when generation fails."""
+    """Refund 1 image_generations count and any spent credit when generation fails."""
+    from credits import refund_scene_spend
+    from db import Invitation, Scene
+
     with get_session() as session:
-        session.execute(
-            text(
-                "UPDATE scenes "
-                "SET image_generations = GREATEST(0, image_generations - 1), status = :st "
-                "WHERE invitation_id = :inv_id AND scene_index = :idx"
-            ),
-            {"inv_id": invitation_id, "idx": scene_index, "st": restore_status},
+        scene_row = (
+            session.query(Scene)
+            .filter(Scene.invitation_id == invitation_id, Scene.scene_index == scene_index)
+            .first()
         )
+        if scene_row:
+            inv = session.query(Invitation).filter(Invitation.id == invitation_id).first()
+            refund_scene_spend(session, scene_row, inv.user_id if inv else None)
+            scene_row.image_generations = max(0, (scene_row.image_generations or 0) - 1)
+            scene_row.status = restore_status
+            scene_row.generating_started_at = None
 
 
 def try_claim_video_generation(
-    invitation_id: str, scene_index: int, max_limit: int
+    invitation_id: str,
+    scene_index: int,
+    max_limit: int,
+    user_id: str | None = None,
+    credit_cost: int = 0,
 ) -> tuple[bool, int, str | None, str | None]:
     """
-    Atomically claim a video generation slot (only when video_generations < max_limit
-    and videoStatus is not queued/generating).
-    Returns (claimed, http_status, error_code, detail).
+    Atomically lock user FOR UPDATE, claim video generation slot (requires image_path IS NOT NULL),
+    check balance, and insert spend ledger row in ONE transaction.
     """
+    import uuid
+    from credits import InsufficientCreditsError, lock_user_and_spend
+    from db import User
+
     with get_session() as session:
+        if user_id and credit_cost > 0:
+            session.query(User).filter(User.id == user_id).with_for_update().one()
+
+        spend_ref = f"spend:vid:{invitation_id}:{scene_index}:{uuid.uuid4().hex[:12]}" if (user_id and credit_cost > 0) else None
         row = session.execute(
             text(
                 "UPDATE scenes "
                 "SET video_generations = video_generations + 1, "
+                "    last_spend_ref = :spend_ref, "
                 "    animation_plan = jsonb_set("
                 "        COALESCE(animation_plan, '{}'::jsonb), "
                 "        '{videoStatus}', '\"queued\"'::jsonb, true"
                 "    ) "
                 "WHERE invitation_id = :inv_id AND scene_index = :idx "
+                "AND image_path IS NOT NULL "
                 "AND video_generations < :max_limit "
                 "AND COALESCE(animation_plan->>'videoStatus', 'idle') NOT IN ('queued', 'generating') "
                 "RETURNING video_generations"
             ),
-            {"inv_id": invitation_id, "idx": scene_index, "max_limit": max_limit},
+            {"inv_id": invitation_id, "idx": scene_index, "max_limit": max_limit, "spend_ref": spend_ref},
         ).first()
         if row:
+            if user_id and credit_cost > 0 and spend_ref:
+                try:
+                    lock_user_and_spend(
+                        session,
+                        user_id=user_id,
+                        credit_type="video",
+                        cost=credit_cost,
+                        reference_id=spend_ref,
+                        invitation_id=invitation_id,
+                        scene_index=scene_index,
+                        note=f"Card {scene_index + 1} video generation",
+                    )
+                except InsufficientCreditsError as exc:
+                    session.rollback()
+                    return False, 402, "INSUFFICIENT_CREDITS", f"Need {exc.needed} video credit(s), have {exc.available}."
             return True, 200, None, None
 
         existing = session.execute(
             text(
-                "SELECT video_generations, animation_plan FROM scenes "
+                "SELECT video_generations, animation_plan, image_path FROM scenes "
                 "WHERE invitation_id = :inv_id AND scene_index = :idx"
             ),
             {"inv_id": invitation_id, "idx": scene_index},
         ).first()
         if not existing:
             return False, 404, "NOT_FOUND", f"Card {scene_index + 1} not found."
+        if not existing.image_path:
+            return False, 400, "NO_INITIAL_IMAGE", "Card image must exist before generating video."
         plan = existing.animation_plan or {}
         v_status = plan.get("videoStatus", "idle")
         if v_status in ("queued", "generating"):
@@ -339,13 +429,24 @@ def try_claim_video_generation(
 
 
 def release_video_generation(invitation_id: str, scene_index: int) -> None:
-    """Refund 1 video_generations count when video generation fails."""
+    """Refund 1 video_generations count and any spent credit when video generation fails."""
+    from credits import refund_scene_spend
+    from db import Invitation, Scene
+
     with get_session() as session:
+        scene_row = (
+            session.query(Scene)
+            .filter(Scene.invitation_id == invitation_id, Scene.scene_index == scene_index)
+            .first()
+        )
+        if scene_row:
+            inv = session.query(Invitation).filter(Invitation.id == invitation_id).first()
+            refund_scene_spend(session, scene_row, inv.user_id if inv else None)
+            scene_row.video_generations = max(0, (scene_row.video_generations or 0) - 1)
         session.execute(
             text(
                 "UPDATE scenes "
-                "SET video_generations = GREATEST(0, video_generations - 1), "
-                "    animation_plan = jsonb_set("
+                "SET animation_plan = jsonb_set("
                 "        jsonb_set(COALESCE(animation_plan, '{}'::jsonb), '{videoStatus}', '\"failed\"'::jsonb, true), "
                 "        '{videoProgress}', '0'::jsonb, true"
                 "    ) "

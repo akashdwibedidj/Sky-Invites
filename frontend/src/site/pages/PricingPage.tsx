@@ -1,13 +1,78 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { COPY } from '../content/copy';
-import { FAQ_ITEMS, PRICING_TIERS } from '../mock/data';
+import { FAQ_ITEMS } from '../mock/data';
 import { BotanicalDivider } from '../components/Ornaments';
 import { PricingCards } from '../components/PricingCards';
+import { fetchPlans, type PlansResponse } from '../../services/creditsApi';
+import type { PricingTier } from '../types';
+
+const FALLBACK_PACKS: PricingTier[] = [
+  {
+    id: 'image_pack_5',
+    name: 'Image Pack',
+    priceLabel: '₹249',
+    cadence: '5 image credits',
+    description: '5 image credits for your invitation cards. Credits never expire.',
+    features: ['5 card image credits', '1 free regeneration per card', 'Credits never expire'],
+    ctaLabel: 'Coming soon',
+    comingSoon: true,
+  },
+  {
+    id: 'video_invite_30s',
+    name: 'Video Invite 30 sec',
+    badge: 'Popular',
+    priceLabel: '₹899',
+    cadence: '3 cards (images + videos)',
+    description: '3 cards with both images and 10-second videos. Credits never expire.',
+    features: ['3 image credits + 3 video credits', '3-card animated invitation', 'Credits never expire'],
+    ctaLabel: 'Coming soon',
+    highlighted: true,
+    comingSoon: true,
+  },
+  {
+    id: 'video_invite_1m',
+    name: 'Video Invite 1 min',
+    priceLabel: '₹1,799',
+    cadence: '6 cards (fixed)',
+    description: '6 cards with both images and 10-second videos. Fixed 6-card invite.',
+    features: ['6 image credits + 6 video credits', 'Fixed 6-card animated invitation', 'Credits never expire'],
+    ctaLabel: 'Coming soon',
+    comingSoon: true,
+  },
+];
 
 export function PricingPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'individuals' | 'businesses'>('individuals');
+  const [plansData, setPlansData] = useState<PlansResponse | null>(null);
+
+  useEffect(() => {
+    fetchPlans()
+      .then(setPlansData)
+      .catch(() => {});
+  }, []);
+
+  const individualTiers: PricingTier[] = plansData
+    ? plansData.plans.map((p) => ({
+        id: p.id,
+        name: p.name,
+        badge: p.id === 'video_invite_30s' ? 'Popular' : undefined,
+        priceLabel: `₹${(p.amount_paise / 100).toLocaleString('en-IN')}`,
+        cadence: p.fixed_card_count ? `${p.card_count} cards (fixed)` : `${p.image_credits} image credits`,
+        description: `${p.description}. Credits never expire.`,
+        features: [
+          p.video_credits > 0
+            ? `${p.image_credits} image credits + ${p.video_credits} video credits`
+            : `${p.image_credits} card image credits`,
+          p.fixed_card_count ? `Fixed ${p.card_count}-card invitation` : '1 free regeneration per card',
+          'Credits never expire',
+        ],
+        ctaLabel: 'Coming soon',
+        highlighted: p.id === 'video_invite_30s',
+        comingSoon: true,
+      }))
+    : FALLBACK_PACKS;
 
   const handleNotifyIndividuals = () => {
     navigate('/');
@@ -72,7 +137,10 @@ export function PricingPage() {
       {activeTab === 'individuals' ? (
         <>
           <div className="mt-12">
-            <PricingCards tiers={PRICING_TIERS} onNotifyClick={handleNotifyIndividuals} />
+            <PricingCards tiers={individualTiers} onNotifyClick={handleNotifyIndividuals} />
+            <p className="mt-6 text-center text-xs text-ink-muted">
+              Unit prices: ₹{(plansData?.unit_prices_paise.image ?? 5000) / 100} per card image · ₹{(plansData?.unit_prices_paise.video ?? 29900) / 100} per 10-second card video · Credits never expire.
+            </p>
           </div>
 
           <BotanicalDivider className="my-16" />
