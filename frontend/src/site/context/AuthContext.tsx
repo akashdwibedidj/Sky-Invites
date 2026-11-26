@@ -45,6 +45,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, token, refreshCredits]);
 
   useEffect(() => {
+    const handler = () => {
+      void refreshCredits();
+    };
+    window.addEventListener('credits:refresh', handler);
+    return () => window.removeEventListener('credits:refresh', handler);
+  }, [refreshCredits]);
+
+  useEffect(() => {
     let active = true;
     const existingToken = api.getAuthToken();
     if (!existingToken) {

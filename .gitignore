@@ -12,3 +12,4 @@ sky-shell/
 # Database backups
 backend/backups/
 *.sql
+*.dump
