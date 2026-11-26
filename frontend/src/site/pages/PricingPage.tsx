@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { COPY } from '../content/copy';
 import { FAQ_ITEMS } from '../mock/data';
 import { BotanicalDivider } from '../components/Ornaments';
 import { PricingCards } from '../components/PricingCards';
+import { useAuth } from '../context/AuthContext';
 import { fetchPlans, type PlansResponse } from '../../services/creditsApi';
+import {
+  createOrder,
+  fetchOrder,
+  loadRazorpayScript,
+  verifyPayment,
+} from '../../services/paymentsApi';
 import type { PricingTier } from '../types';
 
 const FALLBACK_PACKS: PricingTier[] = [
@@ -15,8 +22,8 @@ const FALLBACK_PACKS: PricingTier[] = [
     cadence: '5 image credits',
     description: '5 image credits for your invitation cards. Credits never expire.',
     features: ['5 card image credits', '1 free regeneration per card', 'Credits never expire'],
-    ctaLabel: 'Coming soon',
-    comingSoon: true,
+    ctaLabel: 'Buy now',
+    comingSoon: false,
   },
   {
     id: 'video_invite_30s',
@@ -26,9 +33,9 @@ const FALLBACK_PACKS: PricingTier[] = [
     cadence: '3 cards (images + videos)',
     description: '3 cards with both images and 10-second videos. Credits never expire.',
     features: ['3 image credits + 3 video credits', '3-card animated invitation', 'Credits never expire'],
-    ctaLabel: 'Coming soon',
+    ctaLabel: 'Buy now',
     highlighted: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: 'video_invite_1m',
@@ -37,15 +44,23 @@ const FALLBACK_PACKS: PricingTier[] = [
     cadence: '6 cards (fixed)',
     description: '6 cards with both images and 10-second videos. Fixed 6-card invite.',
     features: ['6 image credits + 6 video credits', 'Fixed 6-card animated invitation', 'Credits never expire'],
-    ctaLabel: 'Coming soon',
-    comingSoon: true,
+    ctaLabel: 'Buy now',
+    comingSoon: false,
   },
 ];
 
 export function PricingPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const isAuthenticated = Boolean(user);
   const [activeTab, setActiveTab] = useState<'individuals' | 'businesses'>('individuals');
   const [plansData, setPlansData] = useState<PlansResponse | null>(null);
+  const [buyingPackId, setBuyingPackId] = useState<string | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchPlans()
@@ -68,9 +83,9 @@ export function PricingPage() {
           p.fixed_card_count ? `Fixed ${p.card_count}-card invitation` : '1 free regeneration per card',
           'Credits never expire',
         ],
-        ctaLabel: 'Coming soon',
+        ctaLabel: 'Buy now',
         highlighted: p.id === 'video_invite_30s',
-        comingSoon: true,
+        comingSoon: false,
       }))
     : FALLBACK_PACKS;
 
@@ -86,6 +101,102 @@ export function PricingPage() {
     window.setTimeout(() => {
       document.getElementById('enquiry')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
+  };
+
+  const handleBuyClick = async (tier: PricingTier) => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: location } });
+      return;
+    }
+
+    setPaymentMessage(null);
+    setBuyingPackId(tier.id);
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded || !(window as unknown as { Razorpay?: new (opts: Record<string, unknown>) => { open: () => void; on: (ev: string, cb: () => void) => void } }).Razorpay) {
+        setPaymentMessage({ type: 'error', text: 'Unable to load Razorpay Checkout. Please check your connection.' });
+        setBuyingPackId(null);
+        return;
+      }
+
+      const order = await createOrder(tier.id);
+      const RazorpayCtor = (window as unknown as {
+        Razorpay: new (opts: Record<string, unknown>) => {
+          open: () => void;
+          on: (ev: string, cb: () => void) => void;
+        };
+      }).Razorpay;
+
+      const rzp = new RazorpayCtor({
+        key: order.key_id,
+        amount: order.amount_paise,
+        currency: order.currency,
+        name: 'Sky Invites',
+        description: tier.name,
+        order_id: order.gateway_order_id,
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+        },
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            await verifyPayment(response);
+            // Poll order status until paid (webhook may arrive first or later)
+            let paid = false;
+            for (let i = 0; i < 10; i++) {
+              const latest = await fetchOrder(order.order_id);
+              if (latest.status === 'paid') {
+                paid = true;
+                break;
+              }
+              await new Promise((r) => setTimeout(r, 1500));
+            }
+            if (paid) {
+              window.dispatchEvent(new Event('credits:refresh'));
+              setPaymentMessage({
+                type: 'success',
+                text: 'Payment successful, credits added!',
+              });
+            } else {
+              setPaymentMessage({
+                type: 'info',
+                text: 'Payment received. Credits are being confirmed—please refresh in a moment.',
+              });
+            }
+          } catch (err) {
+            setPaymentMessage({
+              type: 'error',
+              text: err instanceof Error ? err.message : 'Payment verification failed.',
+            });
+          } finally {
+            setBuyingPackId(null);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setBuyingPackId(null);
+            setPaymentMessage({ type: 'info', text: 'Payment cancelled. No charges were made.' });
+          },
+        },
+      });
+
+      rzp.on('payment.failed', () => {
+        setBuyingPackId(null);
+        setPaymentMessage({ type: 'error', text: 'Payment failed. Please try again.' });
+      });
+
+      rzp.open();
+    } catch (err) {
+      setBuyingPackId(null);
+      setPaymentMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Could not start checkout.',
+      });
+    }
   };
 
   return (
@@ -134,10 +245,37 @@ export function PricingPage() {
         </div>
       </div>
 
+      {paymentMessage && (
+        <div
+          className={`mx-auto mt-8 max-w-2xl rounded-xl border px-5 py-4 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
+            paymentMessage.type === 'success'
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+              : paymentMessage.type === 'error'
+                ? 'border-red-300 bg-red-50 text-red-900'
+                : 'border-peacock/20 bg-ivory-card text-ink'
+          }`}
+        >
+          <span>{paymentMessage.text}</span>
+          {paymentMessage.type === 'success' && (
+            <Link
+              to="/editor/create"
+              className="btn-glass-peacock inline-flex items-center justify-center px-4 py-2 text-xs font-medium whitespace-nowrap"
+            >
+              Back to editor
+            </Link>
+          )}
+        </div>
+      )}
+
       {activeTab === 'individuals' ? (
         <>
           <div className="mt-12">
-            <PricingCards tiers={individualTiers} onNotifyClick={handleNotifyIndividuals} />
+            <PricingCards
+              tiers={individualTiers}
+              onNotifyClick={handleNotifyIndividuals}
+              onBuyClick={handleBuyClick}
+              buyingPackId={buyingPackId}
+            />
             <p className="mt-6 text-center text-xs text-ink-muted">
               Unit prices: ₹{(plansData?.unit_prices_paise.image ?? 5000) / 100} per card image · ₹{(plansData?.unit_prices_paise.video ?? 29900) / 100} per 10-second card video · Credits never expire.
             </p>

@@ -153,6 +153,8 @@ def create_tables() -> None:
         # Credits & ledger: spend reference & timeout tracking on scenes
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS last_spend_ref VARCHAR(128)"))
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS generating_started_at TIMESTAMPTZ"))
+        # Payments: unique index on gateway_order_id (idempotent)
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_gateway_order_id ON orders (gateway_order_id) WHERE gateway_order_id IS NOT NULL"))
         # One-time idempotent free grant backfill for existing users
         conn.execute(text(
             "INSERT INTO credit_ledger (user_id, credit_type, amount, reason, reference_id, note) "

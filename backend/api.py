@@ -74,6 +74,7 @@ from app.render import render_project
 from app.render.adapter import frontend_to_project
 from auth import sign_media_url, verify_media_signature
 from auth_routes import router as auth_router, get_current_user
+from payment_routes import router as payment_router, validate_razorpay_config
 
 logger = logging.getLogger("sky_invites_api")
 logging.basicConfig(level=logging.INFO)
@@ -88,6 +89,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.on_event("startup")
 def _on_startup() -> None:
+    validate_razorpay_config()
     create_tables()
     from credits import sweep_stuck_generating_scenes
     sweep_stuck_generating_scenes()
@@ -106,6 +108,7 @@ app.add_middleware(
 
 # ── Auth router (rate-limited login/signup defined there) ──────────────────────
 app.include_router(auth_router)
+app.include_router(payment_router)
 
 # ── Media directory (no longer publicly mounted) ───────────────────────────────
 MEDIA_DIR = (PROJECT_ROOT / "media").resolve()

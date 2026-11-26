@@ -6,10 +6,17 @@ import type { PricingTier } from '../types';
 
 interface PricingCardsProps {
   onNotifyClick: () => void;
+  onBuyClick?: (tier: PricingTier) => void;
+  buyingPackId?: string | null;
   tiers?: PricingTier[];
 }
 
-export function PricingCards({ onNotifyClick, tiers = PRICING_TIERS }: PricingCardsProps) {
+export function PricingCards({
+  onNotifyClick,
+  onBuyClick,
+  buyingPackId = null,
+  tiers = PRICING_TIERS,
+}: PricingCardsProps) {
   const gridClass =
     tiers.length === 1
       ? 'mx-auto grid max-w-md grid-cols-1'
@@ -103,6 +110,19 @@ export function PricingCards({ onNotifyClick, tiers = PRICING_TIERS }: PricingCa
                   }`}
                 >
                   Coming soon
+                </button>
+              ) : onBuyClick ? (
+                <button
+                  type="button"
+                  disabled={buyingPackId === tier.id}
+                  onClick={() => onBuyClick(tier)}
+                  className={`w-full px-5 py-3 text-sm font-medium whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-peacock disabled:opacity-60 ${
+                    isHighlighted
+                      ? 'btn-glass-light'
+                      : 'btn-glass-peacock'
+                  }`}
+                >
+                  {buyingPackId === tier.id ? 'Processing…' : tier.ctaLabel}
                 </button>
               ) : (
                 <Link
