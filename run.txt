@@ -1,3 +1,6 @@
+.venv\Scripts\activate
+
+
 cd f:\Projects\sky-invites\backend
 ..\.venv\Scripts\uvicorn api:app --reload --port 8000
 

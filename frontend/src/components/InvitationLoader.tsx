@@ -16,7 +16,7 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
 import { getSavedInvitation } from '../services/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 type LoadState = 'loading' | 'ready' | 'error' | 'not-found';
 
@@ -136,7 +136,7 @@ export const InvitationLoader: React.FC = () => {
   if (generatingMsg && loadState === 'loading') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-stone-600">
-        <Loader2 className="w-8 h-8 animate-spin text-[#B88B58]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--color-peacock)]" />
         <p className="text-sm">{generatingMsg}</p>
       </div>
     );
@@ -145,7 +145,7 @@ export const InvitationLoader: React.FC = () => {
   if (loadState === 'loading') {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#B88B58]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--color-peacock)]" />
       </div>
     );
   }
@@ -160,8 +160,8 @@ export const InvitationLoader: React.FC = () => {
         </p>
         <button
           type="button"
-          onClick={() => navigate('/')}
-          className="mt-2 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium hover:bg-[#A27644] transition-colors cursor-pointer"
+          onClick={() => navigate('/editor')}
+          className="mt-2 px-5 py-2.5 rounded-xl bg-[var(--color-peacock)] text-white text-sm font-medium hover:bg-[var(--color-peacock-deep)] transition-colors cursor-pointer"
         >
           ← Back to Dashboard
         </button>
@@ -185,8 +185,8 @@ export const InvitationLoader: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/')}
-            className="px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium hover:bg-[#A27644] transition-colors cursor-pointer"
+            onClick={() => navigate('/editor')}
+            className="px-5 py-2.5 rounded-xl bg-[var(--color-peacock)] text-white text-sm font-medium hover:bg-[var(--color-peacock-deep)] transition-colors cursor-pointer"
           >
             Dashboard
           </button>

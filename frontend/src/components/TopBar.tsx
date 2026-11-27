@@ -1,6 +1,8 @@
 import React from 'react';
-import { ArrowLeft, Check, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft, Check, Plus, Sparkles } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
+import { useAuth } from '../site/context/AuthContext';
 import { ScreenRoute } from '../types/invitation';
 
 const WORKFLOW_STAGES: {
@@ -13,7 +15,7 @@ const WORKFLOW_STAGES: {
   { step: 3, label: 'Image Review', screen: 'step-3-review' },
   { step: 4, label: 'Animation', screen: 'step-4-animation' },
   { step: 5, label: 'Compose', screen: 'step-5-compose' },
-  { step: 6, label: 'Export', screen: 'step-6-export' },
+  { step: 6, label: 'Download', screen: 'step-6-export' },
 ];
 
 function getActiveStepNumber(screen: ScreenRoute): number {
@@ -39,6 +41,7 @@ function getActiveStepNumber(screen: ScreenRoute): number {
 
 export const TopBar: React.FC = () => {
   const { currentScreen, activeInvitation, navigateTo, startNewInvitationFlow } = useInvitations();
+  const { credits } = useAuth();
   const isWorkflow = currentScreen !== 'dashboard';
   const activeStep = getActiveStepNumber(currentScreen);
   const hasScenes = (activeInvitation?.scenes.length ?? 0) > 0;
@@ -47,13 +50,12 @@ export const TopBar: React.FC = () => {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-6">
         {/* Zone 1: Brand Wordmark */}
-        <button
-          type="button"
-          onClick={() => navigateTo('dashboard')}
-          className="text-left font-serif text-xl sm:text-2xl font-semibold tracking-tight text-stone-900 whitespace-nowrap shrink-0 hover:text-[#A27644] transition-colors cursor-pointer"
+        <Link
+          to="/"
+          className="text-left font-serif text-xl sm:text-2xl font-semibold tracking-tight text-stone-900 whitespace-nowrap shrink-0 hover:text-[var(--color-peacock-deep)] transition-colors cursor-pointer"
         >
           Sky Invites
-        </button>
+        </Link>
 
         {/* Zone 2: 6-Stage Stepper (shown in workflow) or quiet dashboard links */}
         {isWorkflow ? (
@@ -75,7 +77,7 @@ export const TopBar: React.FC = () => {
                     onClick={() => isReachable && navigateTo(stage.screen)}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-all ${
                       isCurrent
-                        ? 'bg-[#FAF6EE] text-[#8F6534] border border-[#E3D3BA]'
+                        ? 'bg-[var(--color-ivory-soft)] text-[var(--color-peacock)] border border-[var(--color-hairline)]'
                         : isCompleted
                           ? 'text-stone-700 hover:bg-stone-100 cursor-pointer'
                           : isReachable
@@ -86,7 +88,7 @@ export const TopBar: React.FC = () => {
                     <span
                       className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold tabular-nums ${
                         isCurrent
-                          ? 'bg-[#B88B58] text-white'
+                          ? 'bg-[var(--color-peacock)] text-white'
                           : isCompleted
                             ? 'bg-stone-800 text-white'
                             : 'bg-stone-100 text-stone-500'
@@ -107,11 +109,11 @@ export const TopBar: React.FC = () => {
           </nav>
         ) : (
           <div className="hidden md:flex items-center gap-6 text-sm text-stone-500">
-            <span className="whitespace-nowrap shrink-0">9:16 Portrait Studio</span>
+            <span className="whitespace-nowrap shrink-0">Invitation Video Studio</span>
             <span aria-hidden="true" className="text-stone-300">
               ·
             </span>
-            <span className="whitespace-nowrap shrink-0">1080 × 1920 Video Export</span>
+            <span className="whitespace-nowrap shrink-0">Vertical Video Download</span>
           </div>
         )}
 
@@ -130,11 +132,24 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               onClick={startNewInvitationFlow}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Create New Invitation</span>
             </button>
+          )}
+          {credits && (
+            <Link
+              to="/pricing"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-medium transition-colors whitespace-nowrap"
+              title="View credits & plans"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--color-peacock)]" />
+              <span>
+                {credits.image} {credits.image === 1 ? 'image' : 'images'}, {credits.video}{' '}
+                {credits.video === 1 ? 'video' : 'videos'}
+              </span>
+            </Link>
           )}
         </div>
       </div>
@@ -155,7 +170,7 @@ export const TopBar: React.FC = () => {
                     onClick={() => isReachable && navigateTo(stage.screen)}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap shrink-0 ${
                       isCurrent
-                        ? 'bg-[#B88B58] text-white'
+                        ? 'bg-[var(--color-peacock)] text-white'
                         : isReachable
                           ? 'text-stone-600 hover:bg-stone-200/60'
                           : 'text-stone-300'

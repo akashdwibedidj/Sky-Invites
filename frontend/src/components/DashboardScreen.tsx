@@ -101,21 +101,21 @@ export const DashboardScreen: React.FC = () => {
       {/* Hero Header */}
       <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-stone-200/80">
         <div className="max-w-2xl">
-          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[#A27644] mb-2">
-            Portrait Video Stationery
+          <p className="text-xs font-medium tracking-[0.16em] uppercase text-[var(--color-peacock-deep)] mb-2">
+            Invitation Video Studio
           </p>
           <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-stone-900 tracking-tight [text-wrap:balance]">
             Your Invitation Studio
           </h1>
           <p className="mt-2.5 text-sm sm:text-base text-stone-600 leading-relaxed">
-            Craft 1080 × 1920 vertical invitation films with layered calligraphy, bespoke scene artwork, and gentle cinematic motion.
+            Craft vertical invitation videos with custom calligraphy, card artwork, and gentle motion.
           </p>
         </div>
 
         <button
           type="button"
           onClick={startNewInvitationFlow}
-          className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-2xl shadow-sm transition-all whitespace-nowrap shrink-0 cursor-pointer"
+          className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-2xl shadow-sm transition-all whitespace-nowrap shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Create New Invitation</span>
@@ -152,7 +152,7 @@ export const DashboardScreen: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by couple, type, or venue..."
             aria-label="Search invitations"
-            className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-stone-200 rounded-xl text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#B88B58] focus:ring-2 focus:ring-[#B88B58]/15"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-stone-200 rounded-xl text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[var(--color-peacock)] focus:ring-2 focus:ring-[var(--color-peacock)]/15"
           />
         </div>
       </section>
@@ -173,9 +173,9 @@ export const DashboardScreen: React.FC = () => {
         </div>
       ) : filteredInvitations.length === 0 ? (
         /* Polished Empty State */
-        <div className="rounded-2xl border border-dashed border-stone-300 bg-[#FAF9F6] py-16 px-6 text-center max-w-2xl mx-auto my-6">
+        <div className="rounded-2xl border border-dashed border-stone-300 bg-[var(--color-ivory)] py-16 px-6 text-center max-w-2xl mx-auto my-6">
           <div className="w-12 h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center mx-auto mb-4 shadow-xs">
-            <FolderOpen className="w-5 h-5 text-[#B88B58]" />
+            <FolderOpen className="w-5 h-5 text-[var(--color-peacock)]" />
           </div>
           <h2 className="font-serif text-xl font-semibold text-stone-900">
             {invitations.length === 0
@@ -184,14 +184,14 @@ export const DashboardScreen: React.FC = () => {
           </h2>
           <p className="mt-2 text-sm text-stone-600 max-w-md mx-auto">
             {invitations.length === 0
-              ? 'Begin with an occasion type, add your ceremony schedule, and generate a personalized 9:16 portrait video.'
+              ? 'Begin with an occasion type, add your ceremony schedule, and generate a personalized vertical invitation video.'
               : 'Try clearing your search term or switching back to all invitation statuses.'}
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
               onClick={startNewInvitationFlow}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Create New Invitation</span>
@@ -236,7 +236,7 @@ export const DashboardScreen: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => openInvitation(inv.id)}
-                  className="relative w-full text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B88B58] rounded-[22px]"
+                  className="relative w-full text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-peacock)] rounded-[22px]"
                 >
                   {coverScene ? (
                     <div className="max-w-[230px] mx-auto pointer-events-none">
@@ -255,7 +255,7 @@ export const DashboardScreen: React.FC = () => {
                         className="absolute inset-0 w-full h-full object-cover opacity-55"
                       />
                       <div className="relative z-10 bg-white/85 backdrop-blur-xs px-4 py-3 rounded-xl border border-stone-200/80">
-                        <Film className="w-4 h-4 text-[#B88B58] mx-auto mb-1" />
+                        <Film className="w-4 h-4 text-[var(--color-peacock)] mx-auto mb-1" />
                         <p className="font-serif text-sm font-medium text-stone-900">
                           {inv.title}
                         </p>
@@ -271,7 +271,7 @@ export const DashboardScreen: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => openInvitation(inv.id)}
-                        className="font-serif text-lg font-semibold text-stone-900 hover:text-[#A27644] transition-colors text-left leading-snug cursor-pointer"
+                        className="font-serif text-lg font-semibold text-stone-900 hover:text-[var(--color-peacock-deep)] transition-colors text-left leading-snug cursor-pointer"
                       >
                         {inv.title}
                       </button>
@@ -288,7 +288,7 @@ export const DashboardScreen: React.FC = () => {
                       <span aria-hidden="true">·</span>
                       <span>
                         {inv.scenes.length > 0
-                          ? `${inv.scenes.length} scenes`
+                          ? `${inv.scenes.length} cards`
                           : 'Setup in progress'}
                       </span>
                     </div>
@@ -303,7 +303,7 @@ export const DashboardScreen: React.FC = () => {
                       {inv.status === 'Ready'
                         ? 'Open in Compose →'
                         : inv.scenes.length > 0
-                          ? 'Review Scenes →'
+                          ? 'Review Cards →'
                           : 'Continue Details →'}
                     </button>
 
@@ -338,7 +338,7 @@ export const DashboardScreen: React.FC = () => {
                   <div className="min-w-0">
                     <p className="font-serif text-base font-semibold text-stone-900 truncate">{inv.title}</p>
                     <p className="text-xs text-stone-500 mt-0.5">
-                      {inv.type} · {inv.scene_count} scenes
+                      {inv.type} · {inv.scene_count} cards
                       {inv.created_at ? ` · ${new Date(inv.created_at).toLocaleDateString()}` : ''}
                     </p>
                   </div>
@@ -346,12 +346,12 @@ export const DashboardScreen: React.FC = () => {
                     type="button"
                     disabled={inv.scene_count === 0 || openingId === inv.invitation_id}
                     onClick={() => handleOpenSaved(inv.invitation_id)}
-                    className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {openingId === inv.invitation_id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : null}
-                    {inv.scene_count === 0 ? 'No scenes' : 'Open'}
+                    {inv.scene_count === 0 ? 'No cards' : 'Open'}
                   </button>
                 </div>
               ))}

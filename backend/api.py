@@ -1,23 +1,29 @@
 """
 api.py – FastAPI backend for Sky Invites.
 Exposes endpoints matching services/api.ts shapes.
+Plan 4: real auth, ownership checks, signed media URLs.
 """
 
 import concurrent.futures
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
 import re
+import shutil
 import sys
 import uuid
 from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 # Ensure backend/ is in sys.path
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -25,21 +31,45 @@ PROJECT_ROOT = BACKEND_DIR.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-# Load environment variables (override=True so backend/.env takes priority over stale system env vars)
+# Load environment variables
 load_dotenv(BACKEND_DIR / ".env", override=True)
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
-from config import normalize_category
+from config import (
+    ALLOWED_FONTS,
+    DAILY_ANALYZE_IMAGE_CAP,
+    DAILY_NEW_INVITATIONS_FREE_CAP,
+    DAILY_NEW_INVITATIONS_PAID_CAP,
+    MAX_CREATE_SCENES_RUNS_PER_INVITATION,
+    MAX_IMAGE_GENERATIONS_PER_SCENE,
+    MAX_INVITATION_DICT_BYTES,
+    MAX_INVITATION_FIELD_LEN,
+    MAX_REGENERATE_INSTRUCTION_LEN,
+    MAX_VIDEO_GENERATIONS_PER_SCENE,
+    RATE_LIMIT_ANALYZE_IMAGE,
+    RATE_LIMIT_CREATE_SCENES,
+    RATE_LIMIT_GENERATE_IMAGES,
+    RATE_LIMIT_GENERATE_VIDEO,
+    RATE_LIMIT_REGENERATE_IMAGE,
+    normalize_category,
+)
 from storage import (
     create_invitation,
+    invitation_dir,
     load_state,
     save_state,
     update_scene,
+    validate_invitation_id,
+    try_claim_initial_image_generation,
+    try_claim_image_regeneration,
+    release_image_generation,
+    try_claim_video_generation,
+    release_video_generation,
     image_path as get_image_path,
     video_path as get_video_path,
     rel,
 )
-from db import Invitation, Scene, get_session
+from db import ApiUsageEvent, Invitation, Order, Scene, User, create_tables, get_session
 from sqlalchemy import func
 from graph1.nodes import (
     split_scenes,
@@ -59,18 +89,110 @@ from graph2.nodes import (
 )
 from app.render import render_project
 from app.render.adapter import frontend_to_project
+from auth import decode_access_token, sign_media_url, verify_media_signature
+from auth_routes import router as auth_router, get_current_user
+from leads_routes import router as leads_router
+from payment_routes import router as payment_router, validate_razorpay_config
 
 logger = logging.getLogger("sky_invites_api")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Sky Invites API", version="1.0.0")
+APP_ENV = os.environ.get("APP_ENV", "production").strip().lower() or "production"
+IS_PRODUCTION = APP_ENV == "production"
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
-# Allow only frontend dev origin (port from frontend/package.json = 3000)
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+_PLACEHOLDER_PATTERNS = ("changeme", "placeholder", "your-", "dev-", "example", "replace-me", "secret-key")
+
+
+def _looks_like_placeholder(val: str) -> bool:
+    low = val.strip().lower()
+    return any(p in low for p in _PLACEHOLDER_PATTERNS)
+
+
+def validate_startup_config() -> None:
+    """Validate required keys and production safety invariants at startup."""
+    if not os.environ.get("OPENAI_API_KEY", "").strip():
+        raise RuntimeError("OPENAI_API_KEY environment variable is required.")
+    if not os.environ.get("XAI_API_KEY", "").strip():
+        raise RuntimeError("XAI_API_KEY environment variable is required.")
+
+    if not IS_PRODUCTION:
+        return
+
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "").strip()
+    if not frontend_origin or "localhost" in frontend_origin.lower() or "127.0.0.1" in frontend_origin:
+        raise RuntimeError("FRONTEND_ORIGIN must be set and must not contain localhost in production.")
+
+    for secret_name in ("JWT_SECRET_KEY", "MEDIA_SIGNING_SECRET"):
+        secret_val = os.environ.get(secret_name, "").strip()
+        if len(secret_val) < 32 or _looks_like_placeholder(secret_val):
+            raise RuntimeError(f"{secret_name} must be at least 32 characters and not a placeholder in production.")
+
+    if not os.environ.get("DATABASE_URL", "").strip():
+        raise RuntimeError("DATABASE_URL must be set in production.")
+
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg must be installed and on PATH in production.")
+
+    fonts_dir = BACKEND_DIR / "assets" / "fonts"
+    for family in ALLOWED_FONTS:
+        compact = family.replace(" ", "")
+        regular = fonts_dir / f"{compact}-Regular.ttf"
+        if not regular.is_file():
+            raise RuntimeError(f"Missing required font file for '{family}': {regular}")
+
+
+def _user_rate_key(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        uid = decode_access_token(token)
+        if uid:
+            return f"user:{uid}"
+    return f"ip:{get_remote_address(request)}"
+
+
+# ── Rate limiter ───────────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
+user_limiter = Limiter(key_func=_user_rate_key)
+
+app = FastAPI(
+    title="Sky Invites API",
+    version="1.0.0",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if IS_PRODUCTION:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    validate_startup_config()
+    validate_razorpay_config()
+    create_tables()
+    from credits import sweep_stuck_generating_scenes
+    sweep_stuck_generating_scenes()
+
+# ── CORS ───────────────────────────────────────────────────────────────────────
+_raw_origins = os.environ.get("FRONTEND_ORIGIN", "")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,39 +202,86 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Static Media Mount ────────────────────────────────────────────────────────
+# ── Auth router (rate-limited login/signup defined there) ──────────────────────
+app.include_router(auth_router)
+app.include_router(payment_router)
+app.include_router(leads_router)
+
+# ── Media directory (no longer publicly mounted) ───────────────────────────────
 MEDIA_DIR = (PROJECT_ROOT / "media").resolve()
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
 
-# ── Request / Response Models ─────────────────────────────────────────────────
+# ── Request / Response Models ──────────────────────────────────────────────────
+
+def _check_nested_string_lengths(obj: Any, max_len: int) -> None:
+    if isinstance(obj, str):
+        if len(obj) > max_len:
+            raise ValueError(f"Field exceeds maximum length of {max_len} characters")
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(k, str) and len(k) > max_len:
+                raise ValueError(f"Field key exceeds maximum length of {max_len} characters")
+            _check_nested_string_lengths(v, max_len)
+    elif isinstance(obj, list):
+        for item in obj:
+            _check_nested_string_lengths(item, max_len)
+
 
 class CreateScenesRequest(BaseModel):
     invitation: dict[str, Any]
+
+    @field_validator("invitation")
+    @classmethod
+    def validate_invitation_size(cls, v: dict[str, Any]) -> dict[str, Any]:
+        serialized = json.dumps(v, ensure_ascii=False)
+        if len(serialized.encode("utf-8")) > MAX_INVITATION_DICT_BYTES:
+            raise ValueError(f"Invitation payload exceeds {MAX_INVITATION_DICT_BYTES} bytes")
+        _check_nested_string_lengths(v, MAX_INVITATION_FIELD_LEN)
+        return v
 
 
 class GenerateImagesRequest(BaseModel):
     invitation_id: str
     story_driven: bool = False
 
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
+
 
 class RegenerateImageRequest(BaseModel):
     invitation_id: str
     scene_index: int
-    custom_prompt: Optional[str] = None
-    instruction: Optional[str] = None
+    custom_prompt: Optional[str] = Field(default=None, max_length=MAX_INVITATION_FIELD_LEN)
+    instruction: Optional[str] = Field(default=None, max_length=MAX_REGENERATE_INSTRUCTION_LEN)
+
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
 
 
 class AnalyzeImageRequest(BaseModel):
     invitation_id: str
     scene_index: int
-    animation_note: Optional[str] = None
+    animation_note: Optional[str] = Field(default=None, max_length=MAX_INVITATION_FIELD_LEN)
+
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
 
 
 class GenerateVideoRequest(BaseModel):
     invitation_id: str
     scene_index: int
+
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
 
 
 class PatchSceneRequest(BaseModel):
@@ -129,8 +298,65 @@ class ExportVideoRequest(BaseModel):
     transition: Optional[str] = None
     title: Optional[str] = None
 
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
 
-# ── Conversion Helpers ────────────────────────────────────────────────────────
+
+# ── Ownership helper ───────────────────────────────────────────────────────────
+
+def _validate_id_or_400(invitation_id: str) -> str:
+    try:
+        return validate_invitation_id(invitation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid invitation ID")
+
+
+def _load_and_assert_owner(invitation_id: str, user: User) -> dict:
+    """Load invitation state and verify ownership. Raises 400 on bad ID, 404 on any failure."""
+    _validate_id_or_400(invitation_id)
+    try:
+        st = load_state(invitation_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    with get_session() as session:
+        inv = session.query(Invitation).filter(Invitation.id == invitation_id).first()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+        if inv.user_id != user.id:
+            # Return 404 — never confirm existence to wrong user
+            raise HTTPException(status_code=404, detail="Invitation not found")
+
+    return st
+
+
+# ── Signed media URL helper ────────────────────────────────────────────────────
+
+def _sign_scene_urls(scene_dict: dict, invitation_id: str) -> dict:
+    """Replace /media/... paths with signed /api/media/... URLs in a scene dict."""
+    for key in ("imageUrl", "videoUrl"):
+        val = scene_dict.get(key)
+        if val and isinstance(val, str) and val.startswith("/media/"):
+            # Extract filename from /media/{id}/{file}
+            parts = val.split("/")
+            if len(parts) >= 4:
+                filename = "/".join(parts[3:])
+                scene_dict[key] = sign_media_url(invitation_id, filename)
+    return scene_dict
+
+
+def _sign_export_url(url: str, invitation_id: str) -> str:
+    if url and url.startswith("/media/"):
+        parts = url.split("/")
+        if len(parts) >= 4:
+            filename = "/".join(parts[3:])
+            return sign_media_url(invitation_id, filename)
+    return url
+
+
+# ── Conversion Helpers ─────────────────────────────────────────────────────────
 
 def frontend_to_backend_input(inv: dict[str, Any]) -> dict[str, Any]:
     """Convert frontend Invitation into the backend's expected input structure."""
@@ -178,12 +404,10 @@ def frontend_to_backend_input(inv: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_default_text_layer(scene: dict[str, Any], inv_input: dict[str, Any]) -> dict[str, Any]:
-    """Construct a clean default TextLayer from scene text_data and design typography."""
     return build_text_layer(scene, inv_input)
 
 
 def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_input: dict[str, Any]) -> dict[str, Any]:
-    """Map internal scene representation to the frontend Scene shape."""
     idx = scene.get("scene_index", 0)
     has_image = bool(scene.get("image_path"))
     scene_status = scene.get("status", "pending")
@@ -197,7 +421,7 @@ def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_inp
     else:
         img_status = "pending"
 
-    # Static URL path served by FastAPI
+    # Raw /media/ path — will be signed before returning to client
     image_url = f"/media/{invitation_id}/scene_{idx}.png" if has_image else ""
 
     text_layer = scene.get("text_layer")
@@ -218,7 +442,6 @@ def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_inp
         }
     else:
         animation_plan = dict(raw_animation_plan)
-        # Ensure shouldMove is string[] for the frontend
         animation_plan["shouldMove"] = format_should_move_as_strings(raw_animation_plan.get("shouldMove", []))
         if has_video and animation_plan.get("videoStatus") != "done":
             animation_plan["videoStatus"] = "done"
@@ -226,7 +449,7 @@ def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_inp
         elif not has_video and animation_plan.get("videoStatus") == "done":
             animation_plan["videoProgress"] = 100
 
-    return {
+    result = {
         "id": f"sc-{invitation_id}-{idx}",
         "order": idx + 1,
         "title": scene.get("scene_purpose", f"Scene {idx + 1}"),
@@ -239,34 +462,33 @@ def backend_scene_to_frontend(scene: dict[str, Any], invitation_id: str, inv_inp
         "textLayer": text_layer,
         "animationPlan": animation_plan,
         "videoUrl": f"/media/{invitation_id}/scene_{idx}.mp4" if has_video else None,
+        "analyzed": bool(scene.get("analyzed", False)),
+        "imageGenerations": int(scene.get("image_generations", 0)),
+        "videoGenerations": int(scene.get("video_generations", 0)),
+        "maxImageGenerations": MAX_IMAGE_GENERATIONS_PER_SCENE,
+        "maxVideoGenerations": MAX_VIDEO_GENERATIONS_PER_SCENE,
     }
+    return _sign_scene_urls(result, invitation_id)
 
 
-# ── Background Task Workers ───────────────────────────────────────────────────
+# ── Background Task Workers ────────────────────────────────────────────────────
 
 def run_create_scenes_task(invitation_id: str, inv_input: dict[str, Any]) -> None:
-    """Stage 1: split_scenes -> style_bible -> build_prompts -> stage1_done."""
     try:
         logger.info(f"[{invitation_id}] Starting Stage 1: create_scenes")
         st = load_state(invitation_id)
         st["status"] = "running"
         save_state(invitation_id, st)
 
-        # Strip frontend_invitation from user_input before passing to LLMs.
-        # It is a large stored blob that serves the reopen-invitation feature only
-        # and must never be sent to the LLM (would blow the context window).
         llm_input = {k: v for k, v in inv_input.items() if k != "frontend_invitation"}
 
-        # 1. split_scenes
         split_res = split_scenes({"invitation_id": invitation_id, "input": llm_input})
         st = load_state(invitation_id)
         scenes = st["scenes"]
 
-        # 2. style_bible
         bible_res = style_bible({"invitation_id": invitation_id, "input": llm_input})
         st = load_state(invitation_id)
 
-        # 3. build_prompt_scene in parallel
         prompt_results = []
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_idx = {
@@ -285,7 +507,6 @@ def run_create_scenes_task(invitation_id: str, inv_input: dict[str, Any]) -> Non
                 res = future.result()
                 prompt_results.extend(res["_prompt_results"])
 
-        # 4. collect_prompts & initialize default text_layer
         st = load_state(invitation_id)
         prompt_map = {r["scene_index"]: r["image_prompt"] for r in prompt_results}
         for sc in st["scenes"]:
@@ -315,14 +536,12 @@ def _generate_and_layout_single_scene(
     style_bible_data: dict[str, Any],
     prev_b64: Optional[str] = None,
 ) -> tuple[int, bool, Optional[str]]:
-    """Helper to generate one image and run text layout for that scene."""
     idx = scene["scene_index"]
     try:
         out = get_image_path(invitation_id, idx)
         _generate_one_image(scene["image_prompt"], out, prev_b64)
         img_rel = rel(out)
 
-        # Run layout
         state_for_layout = {
             "invitation_id": invitation_id,
             "input": inv_input,
@@ -342,12 +561,11 @@ def _generate_and_layout_single_scene(
         return idx, True, _file_to_b64(out)
     except Exception as err:
         logger.error(f"[{invitation_id}] Scene {idx} image generation failed: {err}")
-        update_scene(invitation_id, idx, status="failed")
+        release_image_generation(invitation_id, idx, restore_status="failed")
         return idx, False, None
 
 
 def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
-    """Stage 2: generate_images -> layout_text for each scene."""
     try:
         logger.info(f"[{invitation_id}] Starting Stage 2: generate_images (story_driven={story_driven})")
         st = load_state(invitation_id)
@@ -358,13 +576,24 @@ def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
         inv_input = st["input"]
         bible = st["style_bible"]
 
-        # Mark all scenes as generating
+        from pricing_config import IMAGE_INITIAL_COST
+
+        scenes_to_generate = []
         for s in scenes:
-            update_scene(invitation_id, s["scene_index"], status="generating")
+            if s.get("image_path"):
+                continue
+            claimed, _, _, _ = try_claim_initial_image_generation(
+                invitation_id,
+                s["scene_index"],
+                user_id=st.get("user_id"),
+                credit_cost=IMAGE_INITIAL_COST,
+            )
+            if claimed:
+                scenes_to_generate.append(s)
 
         if story_driven:
             prev_b64: Optional[str] = None
-            for sc in scenes:
+            for sc in scenes_to_generate:
                 _, success, next_b64 = _generate_and_layout_single_scene(
                     invitation_id, sc, inv_input, bible, prev_b64
                 )
@@ -381,7 +610,7 @@ def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
                         bible,
                         None,
                     )
-                    for sc in scenes
+                    for sc in scenes_to_generate
                 ]
                 for f in concurrent.futures.as_completed(futures):
                     f.result()
@@ -403,12 +632,9 @@ def run_generate_images_task(invitation_id: str, story_driven: bool) -> None:
 
 
 def run_regenerate_image_task(invitation_id: str, scene_index: int, prompt: Optional[str]) -> None:
-    """Regenerates a single scene's background image and updates text layout."""
     try:
-        update_scene(invitation_id, scene_index, status="generating")
         node_regenerate_image(invitation_id, scene_index, prompt)
 
-        # Refresh text layout with new image
         st = load_state(invitation_id)
         scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
         layout_res = layout_text_scene({
@@ -418,28 +644,24 @@ def run_regenerate_image_task(invitation_id: str, scene_index: int, prompt: Opti
             "_current_scene": scene,
         })
         text_layer = layout_res["_layout_results"][0]["text_layer"]
-        update_scene(invitation_id, scene_index, text_layer=text_layer, status="done")
+        update_scene(invitation_id, scene_index, text_layer=text_layer, status="done", analyzed=False)
     except Exception as err:
         logger.error(f"[{invitation_id}] Scene {scene_index} regenerate failed: {err}")
-        update_scene(invitation_id, scene_index, status="failed")
+        try:
+            st = load_state(invitation_id)
+            sc = next((s for s in st["scenes"] if s["scene_index"] == scene_index), {})
+            restore = "done" if sc.get("image_path") else "failed"
+        except Exception:
+            restore = "failed"
+        release_image_generation(invitation_id, scene_index, restore_status=restore)
 
 
 def run_generate_video_task(invitation_id: str, scene_index: int) -> None:
-    """Calls Grok for a single scene and saves the generated MP4."""
     try:
         generate_video_for_scene(invitation_id, scene_index)
     except Exception as err:
         logger.error(f"[{invitation_id}] Scene {scene_index} video generation failed: {err}")
-        try:
-            st = load_state(invitation_id)
-            scene = next(s for s in st["scenes"] if s["scene_index"] == scene_index)
-            if not scene.get("animation_plan"):
-                scene["animation_plan"] = {}
-            scene["animation_plan"]["videoStatus"] = "failed"
-            scene["animation_plan"]["videoProgress"] = 0
-            save_state(invitation_id, st)
-        except Exception:
-            pass
+        release_video_generation(invitation_id, scene_index)
 
 
 def run_export_video_task(
@@ -448,7 +670,8 @@ def run_export_video_task(
     transition: Optional[str] = None,
     title: Optional[str] = None,
 ) -> None:
-    export_dir = MEDIA_DIR / invitation_id / "export"
+    inv_folder = invitation_dir(invitation_id)
+    export_dir = inv_folder / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
     status_file = export_dir / "status.json"
     work_dir = export_dir / "work"
@@ -517,6 +740,7 @@ def run_export_video_task(
         size_mb = f"{final_output.stat().st_size / (1024 * 1024):.1f} MB"
         slug = re.sub(r"[^a-z0-9]+", "-", (title or invitation_id).lower()).strip("-")
         file_name = f"{slug or 'sky-invite'}-1080x1920.mp4"
+        # Raw /media/ path stored in status.json — signed when served via GET export-status
         media_url = f"/media/{invitation_id}/export/final.mp4"
 
         write_status({
@@ -536,60 +760,197 @@ def run_export_video_task(
             "status": "failed",
             "progress": 0,
             "stage": "Export failed",
-            "error": str(exc),
+            "error": "Video export failed. Please try again.",
             "url": None,
             "fileName": None,
             "sizeMb": None,
         })
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# ── Guarded media endpoint ─────────────────────────────────────────────────────
+
+@app.get("/api/media/{invitation_id}/{file_path:path}")
+def serve_media(
+    invitation_id: str,
+    file_path: str,
+    exp: Optional[str] = Query(default=None),
+    sig: Optional[str] = Query(default=None),
+):
+    """
+    Serves media files with HMAC signature + expiry verification.
+    Does NOT require a Bearer token (img/video tags cannot send it).
+    Returns 404 on any failure to avoid leaking information.
+    """
+    # Reject missing params
+    if not exp or not sig:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Validate invitation_id and reject path traversal attempts
+    try:
+        allowed_root = invitation_dir(invitation_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if ".." in file_path or file_path.startswith("/") or "\\" in file_path:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Verify HMAC + expiry
+    if not verify_media_signature(invitation_id, file_path, exp, sig):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Resolve and check the file
+    target = (allowed_root / file_path).resolve()
+
+    # Second path-traversal check after resolve
+    if not target.is_relative_to(allowed_root):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return FileResponse(str(target))
+
+
+# ── Invitation Endpoints ───────────────────────────────────────────────────────
 
 @app.post("/api/create-scenes", status_code=status.HTTP_202_ACCEPTED)
-def create_scenes_endpoint(req: CreateScenesRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
-    """
-    Corresponds to api.ts:createScenes.
-    Saves invitation, kicks off Stage 1 (split, style_bible, prompts) in background.
-    """
+@user_limiter.limit(RATE_LIMIT_CREATE_SCENES)
+def create_scenes_endpoint(
+    request: Request,
+    req: CreateScenesRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
     raw_inv = req.invitation
-    inv_id = str(raw_inv.get("id") or uuid.uuid4().hex[:8])
-    backend_input = frontend_to_backend_input(raw_inv)
-    backend_input["frontend_invitation"] = raw_inv
+    candidate_id = raw_inv.get("id")
+    inv_id: Optional[str] = None
 
-    create_invitation(inv_id, backend_input)
+    # Honor a client-supplied id ONLY if it is valid, already exists in DB, AND belongs to the caller.
+    if isinstance(candidate_id, str) and candidate_id.strip():
+        try:
+            valid_candidate = validate_invitation_id(candidate_id.strip())
+            with get_session() as session:
+                inv = session.query(Invitation).filter(Invitation.id == valid_candidate).first()
+                if inv and inv.user_id == current_user.id:
+                    inv_id = valid_candidate
+                    existing_st = load_state(inv_id)
+                    if existing_st.get("scenes"):
+                        return {
+                            "invitation_id": inv_id,
+                            "status": existing_st.get("status", "stage1_done"),
+                            "existing": True,
+                        }
+                    if (inv.create_scenes_count or 0) >= MAX_CREATE_SCENES_RUNS_PER_INVITATION:
+                        raise HTTPException(
+                            status_code=429,
+                            detail="Maximum scene generation re-runs reached for this invitation.",
+                        )
+                    inv.create_scenes_count = (inv.create_scenes_count or 0) + 1
+        except ValueError:
+            pass
+
+    if inv_id is None:
+        # Ignore any unknown/unowned/orphan client id and generate a fresh server-side uuid4 hex.
+        inv_id = uuid.uuid4().hex
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        with get_session() as session:
+            has_paid = (
+                session.query(Order.id)
+                .filter(Order.user_id == current_user.id, Order.status == "paid")
+                .first()
+                is not None
+            )
+            daily_cap = DAILY_NEW_INVITATIONS_PAID_CAP if has_paid else DAILY_NEW_INVITATIONS_FREE_CAP
+            created_24h = (
+                session.query(func.count(Invitation.id))
+                .filter(Invitation.user_id == current_user.id, Invitation.created_at >= since)
+                .scalar()
+                or 0
+            )
+            if created_24h >= daily_cap:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Daily invitation limit reached ({daily_cap}/day).",
+                )
+
+        backend_input = frontend_to_backend_input(raw_inv)
+        backend_input["frontend_invitation"] = raw_inv
+        create_invitation(inv_id, backend_input)
+        with get_session() as session:
+            inv = session.query(Invitation).filter(Invitation.id == inv_id).first()
+            if inv:
+                inv.user_id = current_user.id
+                inv.create_scenes_count = 1
+    else:
+        backend_input = frontend_to_backend_input(raw_inv)
+        backend_input["frontend_invitation"] = raw_inv
+
     background_tasks.add_task(run_create_scenes_task, inv_id, backend_input)
-
     return {"invitation_id": inv_id, "status": "running"}
 
 
 @app.post("/api/generate-images", status_code=status.HTTP_202_ACCEPTED)
-def generate_images_endpoint(req: GenerateImagesRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
-    """
-    Corresponds to api.ts:generateImages.
-    Generates 9:16 background artwork and runs text layout for each scene.
-    """
-    try:
-        load_state(req.invitation_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Invitation {req.invitation_id} not found")
+@user_limiter.limit(RATE_LIMIT_GENERATE_IMAGES)
+def generate_images_endpoint(
+    request: Request,
+    req: GenerateImagesRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    from credits import get_balances
+    from db import get_session
+    from pricing_config import IMAGE_INITIAL_COST
+
+    st = _load_and_assert_owner(req.invitation_id, current_user)
+    scenes = st.get("scenes", [])
+    if scenes and all(s.get("image_path") for s in scenes):
+        return {"invitation_id": req.invitation_id, "status": "done", "existing": True}
+
+    pending_count = sum(1 for s in scenes if not s.get("image_path") and s.get("status") != "generating")
+    needed = pending_count * IMAGE_INITIAL_COST
+    if needed > 0:
+        with get_session() as session:
+            available = get_balances(session, current_user.id).get("image", 0)
+        if available < needed:
+            return JSONResponse(
+                status_code=402,
+                content={
+                    "code": "INSUFFICIENT_CREDITS",
+                    "credit_type": "image",
+                    "needed": needed,
+                    "available": available,
+                    "detail": f"Need {needed} image credit(s), have {available}.",
+                },
+            )
 
     background_tasks.add_task(run_generate_images_task, req.invitation_id, req.story_driven)
     return {"invitation_id": req.invitation_id, "status": "running"}
 
 
 @app.post("/api/regenerate-image", status_code=status.HTTP_202_ACCEPTED)
-def regenerate_image_endpoint(req: RegenerateImageRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
-    """
-    Corresponds to api.ts:regenerateImage and editImageWithInstruction.
-    """
-    try:
-        st = load_state(req.invitation_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Invitation {req.invitation_id} not found")
+@user_limiter.limit(RATE_LIMIT_REGENERATE_IMAGE)
+def regenerate_image_endpoint(
+    request: Request,
+    req: RegenerateImageRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    from pricing_config import IMAGE_REGENERATION_COST
 
+    st = _load_and_assert_owner(req.invitation_id, current_user)
     scene = next((s for s in st["scenes"] if s["scene_index"] == req.scene_index), None)
     if not scene:
-        raise HTTPException(status_code=404, detail=f"Scene {req.scene_index} not found")
+        raise HTTPException(status_code=404, detail=f"Card {req.scene_index + 1} not found")
+
+    claimed, http_status_code, err_code, detail = try_claim_image_regeneration(
+        req.invitation_id,
+        req.scene_index,
+        MAX_IMAGE_GENERATIONS_PER_SCENE,
+        user_id=current_user.id,
+        credit_cost=IMAGE_REGENERATION_COST,
+    )
+    if not claimed:
+        return JSONResponse(status_code=http_status_code, content={"code": err_code, "detail": detail})
 
     final_prompt = req.custom_prompt
     if req.instruction and req.instruction.strip():
@@ -601,46 +962,115 @@ def regenerate_image_endpoint(req: RegenerateImageRequest, background_tasks: Bac
 
 
 @app.post("/api/analyze-image")
-def analyze_image_endpoint(req: AnalyzeImageRequest) -> dict[str, Any]:
-    """
-    Corresponds to api.ts:analyzeImage.
-    Runs vision analysis on scene image; returns structured AnimationPlan.
-    """
+@user_limiter.limit(RATE_LIMIT_ANALYZE_IMAGE)
+def analyze_image_endpoint(
+    request: Request,
+    req: AnalyzeImageRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    st = _load_and_assert_owner(req.invitation_id, current_user)
+    scene = next((s for s in st.get("scenes", []) if s["scene_index"] == req.scene_index), None)
+    if not scene:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    if scene.get("analyzed") and scene.get("animation_plan"):
+        plan = dict(scene["animation_plan"])
+        plan["shouldMove"] = format_should_move_as_strings(plan.get("shouldMove", []))
+        return plan
+
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    with get_session() as session:
+        used_24h = (
+            session.query(func.count(ApiUsageEvent.id))
+            .filter(
+                ApiUsageEvent.user_id == current_user.id,
+                ApiUsageEvent.endpoint == "analyze-image",
+                ApiUsageEvent.created_at >= since,
+            )
+            .scalar()
+            or 0
+        )
+        if used_24h >= DAILY_ANALYZE_IMAGE_CAP:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily image analysis limit reached ({DAILY_ANALYZE_IMAGE_CAP}/day).",
+            )
+        session.add(ApiUsageEvent(user_id=current_user.id, endpoint="analyze-image"))
+
     try:
         plan = analyze_one_scene(req.invitation_id, req.scene_index, req.animation_note)
+        update_scene(req.invitation_id, req.scene_index, analyzed=True)
         return plan
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Invitation or scene image not found")
+        raise HTTPException(status_code=404, detail="Invitation or card image not found")
     except Exception as exc:
         logger.error(f"analyze-image error: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Image analysis failed. Please try again.")
 
 
 @app.post("/api/generate-video", status_code=status.HTTP_202_ACCEPTED)
-def generate_video_endpoint(req: GenerateVideoRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
-    """
-    Corresponds to api.ts:generateVideo.
-    Triggers Grok video generation for a single scene in the background.
-    """
-    try:
-        load_state(req.invitation_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Invitation {req.invitation_id} not found")
+@user_limiter.limit(RATE_LIMIT_GENERATE_VIDEO)
+def generate_video_endpoint(
+    request: Request,
+    req: GenerateVideoRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    from pricing_config import VIDEO_INITIAL_COST
+
+    _load_and_assert_owner(req.invitation_id, current_user)
+    claimed, http_status_code, err_code, detail = try_claim_video_generation(
+        req.invitation_id,
+        req.scene_index,
+        MAX_VIDEO_GENERATIONS_PER_SCENE,
+        user_id=current_user.id,
+        credit_cost=VIDEO_INITIAL_COST,
+    )
+    if not claimed:
+        return JSONResponse(status_code=http_status_code, content={"code": err_code, "detail": detail})
 
     background_tasks.add_task(run_generate_video_task, req.invitation_id, req.scene_index)
     return {"invitation_id": req.invitation_id, "scene_index": req.scene_index, "status": "queued"}
 
 
-@app.get("/api/invitations/{invitation_id}/status")
-def get_invitation_status(invitation_id: str) -> dict[str, Any]:
-    """
-    Polling endpoint returning overall invitation status and per-scene statuses.
-    """
-    try:
-        st = load_state(invitation_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Invitation {invitation_id} not found")
+@app.get("/api/credits")
+def get_credits_endpoint(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
+    from credits import get_user_credits_summary
+    return get_user_credits_summary(current_user.id)
 
+
+@app.get("/api/plans")
+def get_plans_endpoint() -> dict[str, Any]:
+    from pricing_config import (
+        CREDITS_EXPIRE,
+        FREE_TIER_CREDITS,
+        IMAGE_FREE_REGENERATIONS_PER_CARD,
+        IMAGE_INITIAL_COST,
+        IMAGE_REGENERATION_COST,
+        PLANS,
+        UNIT_PRICES_PAISE,
+        VIDEO_INITIAL_COST,
+    )
+    return {
+        "plans": PLANS,
+        "unit_prices_paise": UNIT_PRICES_PAISE,
+        "free_tier_credits": FREE_TIER_CREDITS,
+        "credits_expire": CREDITS_EXPIRE,
+        "rules": {
+            "image_initial_cost": IMAGE_INITIAL_COST,
+            "image_free_regenerations_per_card": IMAGE_FREE_REGENERATIONS_PER_CARD,
+            "image_regeneration_cost": IMAGE_REGENERATION_COST,
+            "video_initial_cost": VIDEO_INITIAL_COST,
+        },
+    }
+
+
+@app.get("/api/invitations/{invitation_id}/status")
+def get_invitation_status(
+    invitation_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    st = _load_and_assert_owner(invitation_id, current_user)
     inv_status = st.get("status", "pending")
     scenes_status = []
 
@@ -663,6 +1093,9 @@ def get_invitation_status(invitation_id: str) -> dict[str, Any]:
         v_status = anim_plan.get("videoStatus", "done" if has_video else "idle")
         v_progress = anim_plan.get("videoProgress", 100 if has_video else 0)
 
+        raw_image_url = f"/media/{invitation_id}/scene_{idx}.png" if has_image else None
+        raw_video_url = f"/media/{invitation_id}/scene_{idx}.mp4" if has_video else None
+
         scenes_status.append({
             "id": f"sc-{invitation_id}-{idx}",
             "scene_index": idx,
@@ -671,8 +1104,11 @@ def get_invitation_status(invitation_id: str) -> dict[str, Any]:
             "image_status": img_status,
             "video_status": v_status,
             "video_progress": v_progress,
-            "image_url": f"/media/{invitation_id}/scene_{idx}.png" if has_image else None,
-            "video_url": f"/media/{invitation_id}/scene_{idx}.mp4" if has_video else None,
+            "image_url": sign_media_url(invitation_id, f"scene_{idx}.png") if has_image else None,
+            "video_url": sign_media_url(invitation_id, f"scene_{idx}.mp4") if has_video else None,
+            "image_generations": int(s.get("image_generations", 0)),
+            "video_generations": int(s.get("video_generations", 0)),
+            "analyzed": bool(s.get("analyzed", False)),
         })
 
     return {
@@ -683,14 +1119,12 @@ def get_invitation_status(invitation_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/invitations")
-def list_invitations() -> list[dict[str, Any]]:
-    """
-    List saved invitations, newest first.
-    Includes invitation_id, title, type, created_at, status, scene_count.
-    """
+def list_invitations(current_user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
+    """List invitations belonging to the current user, newest first."""
     with get_session() as session:
         invs = (
             session.query(Invitation)
+            .filter(Invitation.user_id == current_user.id)
             .order_by(Invitation.created_at.desc())
             .all()
         )
@@ -702,8 +1136,7 @@ def list_invitations() -> list[dict[str, Any]]:
                 .scalar() or 0
             )
             f_inv = (inv.user_input or {}).get("frontend_invitation") or {}
-            
-            # Rule 4: title for old invitations: bride/groom, honoree or host name, else the id
+
             title = f_inv.get("title")
             if not title:
                 u_input = inv.user_input or {}
@@ -734,15 +1167,11 @@ def list_invitations() -> list[dict[str, Any]]:
 
 
 @app.get("/api/invitations/{invitation_id}")
-def get_invitation(invitation_id: str) -> dict[str, Any]:
-    """
-    Returns style bible and complete scenes for the invitation.
-    """
-    try:
-        st = load_state(invitation_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Invitation {invitation_id} not found")
-
+def get_invitation(
+    invitation_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    st = _load_and_assert_owner(invitation_id, current_user)
     inv_input = st.get("input", {})
     scenes = [
         backend_scene_to_frontend(s, invitation_id, inv_input)
@@ -759,16 +1188,13 @@ def get_invitation(invitation_id: str) -> dict[str, Any]:
 
 
 @app.patch("/api/invitations/{invitation_id}/scenes/{scene_index}")
-def patch_scene(invitation_id: str, scene_index: int, req: PatchSceneRequest) -> dict[str, Any]:
-    """
-    Plain DB update for scene text_layer, image_prompt, video_prompt, or animation_note.
-    No AI model is invoked.
-    """
-    try:
-        st = load_state(invitation_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Invitation {invitation_id} not found")
-
+def patch_scene(
+    invitation_id: str,
+    scene_index: int,
+    req: PatchSceneRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    st = _load_and_assert_owner(invitation_id, current_user)
     scene = next((s for s in st["scenes"] if s["scene_index"] == scene_index), None)
     if not scene:
         raise HTTPException(status_code=404, detail=f"Scene {scene_index} not found")
@@ -792,7 +1218,6 @@ def patch_scene(invitation_id: str, scene_index: int, req: PatchSceneRequest) ->
     if fields_to_update:
         update_scene(invitation_id, scene_index, **fields_to_update)
 
-    # Reload fresh state
     fresh_st = load_state(invitation_id)
     updated_scene = next(s for s in fresh_st["scenes"] if s["scene_index"] == scene_index)
     return {
@@ -802,11 +1227,12 @@ def patch_scene(invitation_id: str, scene_index: int, req: PatchSceneRequest) ->
 
 
 @app.post("/api/export-video", status_code=status.HTTP_202_ACCEPTED)
-def export_video_endpoint(req: ExportVideoRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
-    """
-    Corresponds to api.ts:exportVideo.
-    Renders 1080x1920 MP4 combining video/still background clips and animated typography layers.
-    """
+def export_video_endpoint(
+    req: ExportVideoRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    _load_and_assert_owner(req.invitation_id, current_user)
     background_tasks.add_task(
         run_export_video_task,
         req.invitation_id,
@@ -818,11 +1244,12 @@ def export_video_endpoint(req: ExportVideoRequest, background_tasks: BackgroundT
 
 
 @app.get("/api/invitations/{invitation_id}/export-status")
-def get_export_status(invitation_id: str) -> dict[str, Any]:
-    """
-    Polling endpoint returning status, progress (0-100), stage label, and file metadata when done.
-    """
-    status_file = MEDIA_DIR / invitation_id / "export" / "status.json"
+def get_export_status(
+    invitation_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    _load_and_assert_owner(invitation_id, current_user)
+    status_file = invitation_dir(invitation_id) / "export" / "status.json"
     if not status_file.exists():
         return {
             "status": "idle",
@@ -835,6 +1262,9 @@ def get_export_status(invitation_id: str) -> dict[str, Any]:
         }
     try:
         data = json.loads(status_file.read_text(encoding="utf-8"))
+        # Sign the export URL if present
+        if data.get("url"):
+            data["url"] = _sign_export_url(data["url"], invitation_id)
         return data
     except Exception as e:
         logger.error(f"Error reading export status: {e}")
@@ -842,7 +1272,7 @@ def get_export_status(invitation_id: str) -> dict[str, Any]:
             "status": "failed",
             "progress": 0,
             "stage": "Status read error",
-            "error": str(e),
+            "error": "Could not read export status.",
             "url": None,
             "fileName": None,
             "sizeMb": None,

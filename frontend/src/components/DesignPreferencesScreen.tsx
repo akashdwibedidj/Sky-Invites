@@ -33,7 +33,7 @@ export const DesignPreferencesScreen: React.FC = () => {
         <button
           type="button"
           onClick={() => navigateTo('dashboard')}
-          className="mt-4 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium cursor-pointer"
+          className="mt-4 px-5 py-2.5 rounded-xl bg-[var(--color-peacock)] text-white text-sm font-medium cursor-pointer"
         >
           Dashboard
         </button>
@@ -42,6 +42,9 @@ export const DesignPreferencesScreen: React.FC = () => {
   }
 
   const { design, details, type } = activeInvitation;
+  const hasGeneratedImages = activeInvitation.scenes.some(
+    (s) => s.imageStatus === 'done' && Boolean(s.imageUrl)
+  );
 
   const previewNames =
     details.groomName && details.brideName
@@ -65,14 +68,14 @@ export const DesignPreferencesScreen: React.FC = () => {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-12">
       <div className="mb-8">
-        <p className="text-xs font-medium tracking-[0.16em] uppercase text-[#A27644] mb-2">
+        <p className="text-xs font-medium tracking-[0.16em] uppercase text-[var(--color-peacock-deep)] mb-2">
           Stage 2 · Visual & Motion Direction
         </p>
         <h1 className="font-serif text-3xl font-semibold text-stone-900 tracking-tight">
           Design Preferences
         </h1>
         <p className="mt-1.5 text-sm text-stone-600">
-          Configure scene pacing, visual stationery theme, typography pairing, and ambient effects before our AI studio generates your 9:16 frames.
+          Configure card pacing, visual theme, typography pairing, and ambient effects before creating your invitation cards.
         </p>
       </div>
 
@@ -82,21 +85,22 @@ export const DesignPreferencesScreen: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-stone-100">
             <div>
               <h2 className="font-serif text-xl font-semibold text-stone-900">
-                Number of Pages / Scenes
+                Number of Cards
               </h2>
               <p className="text-xs text-stone-500 mt-1">
-                Choose between 1 and 12 portrait 9:16 cards for your invitation reel.
+                Choose between 1 and 12 vertical cards for your invitation video.
               </p>
             </div>
 
-            <div className="inline-flex items-center gap-3 bg-[#FAF9F6] border border-stone-200 rounded-xl p-1.5 self-start sm:self-auto">
+            <div className="inline-flex items-center gap-3 bg-[var(--color-ivory)] border border-stone-200 rounded-xl p-1.5 self-start sm:self-auto">
               <button
                 type="button"
+                disabled={hasGeneratedImages}
                 onClick={() =>
                   updateActiveDesign({ sceneCount: Math.max(1, design.sceneCount - 1) })
                 }
                 aria-label="Decrease scene count"
-                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 cursor-pointer"
+                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Minus className="w-4 h-4" />
               </button>
@@ -105,15 +109,21 @@ export const DesignPreferencesScreen: React.FC = () => {
               </span>
               <button
                 type="button"
+                disabled={hasGeneratedImages}
                 onClick={() =>
                   updateActiveDesign({ sceneCount: Math.min(12, design.sceneCount + 1) })
                 }
                 aria-label="Increase scene count"
-                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 cursor-pointer"
+                className="w-9 h-9 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-stone-700 hover:bg-stone-50 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
+            {hasGeneratedImages && (
+              <p className="text-[11px] text-stone-500">
+                Card count & duration are locked after images are generated.
+              </p>
+            )}
           </div>
 
           {/* Transition Between Pages */}
@@ -134,13 +144,13 @@ export const DesignPreferencesScreen: React.FC = () => {
                     onClick={() => updateActiveDesign({ transition: tr.value })}
                     className={`rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
                       selected
-                        ? 'border-[#B88B58] bg-[#FAF6EE] ring-2 ring-[#B88B58]/20'
+                        ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] ring-2 ring-[var(--color-peacock)]/20'
                         : 'border-stone-200 bg-white hover:border-stone-300'
                     }`}
                   >
                     <div className="h-10 rounded-lg bg-stone-100/80 border border-stone-200/70 mb-2.5 flex items-center justify-center overflow-hidden relative">
                       <div className="w-5 h-7 rounded-[3px] bg-white border border-stone-300 shadow-2xs" />
-                      <div className="w-5 h-7 rounded-[3px] bg-[#E8DEC8] border border-[#C9B38C] -ml-2 opacity-80" />
+                      <div className="w-5 h-7 rounded-[3px] bg-[var(--color-hairline)] border border-[#C9B38C] -ml-2 opacity-80" />
                     </div>
                     <div className="text-xs font-semibold text-stone-900">{tr.value}</div>
                     <div className="text-[11px] text-stone-500 mt-0.5 leading-snug">
@@ -164,7 +174,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                 Select one or more subtle atmospheric overlays with live preview.
               </p>
             </div>
-            <span className="text-xs text-[#8F6534] font-medium">
+            <span className="text-xs text-[var(--color-peacock)] font-medium">
               Can also be added after video generation.
             </span>
           </div>
@@ -179,7 +189,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                   onClick={() => toggleFallingEffect(ef.value)}
                   className={`relative rounded-xl border p-3 text-left transition-all cursor-pointer ${
                     selected
-                      ? 'border-[#B88B58] bg-[#FAF6EE] ring-2 ring-[#B88B58]/20'
+                      ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] ring-2 ring-[var(--color-peacock)]/20'
                       : 'border-stone-200 bg-white hover:border-stone-300'
                   }`}
                 >
@@ -192,7 +202,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                       </span>
                     )}
                     {selected && (
-                      <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[#B88B58] text-white flex items-center justify-center z-30">
+                      <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[var(--color-peacock)] text-white flex items-center justify-center z-30">
                         <Check className="w-2.5 h-2.5" />
                       </span>
                     )}
@@ -226,7 +236,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                     onClick={() => updateActiveDesign({ theme: th.style })}
                     className={`rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
                       selected
-                        ? 'border-[#B88B58] bg-[#FAF6EE] ring-2 ring-[#B88B58]/20'
+                        ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] ring-2 ring-[var(--color-peacock)]/20'
                         : 'border-stone-200 bg-white hover:border-stone-300'
                     }`}
                   >
@@ -254,7 +264,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                     onClick={() => updateActiveDesign({ palette: pal })}
                     className={`rounded-xl border p-3 text-left transition-all cursor-pointer ${
                       selected
-                        ? 'border-[#B88B58] bg-[#FAF6EE] ring-2 ring-[#B88B58]/20'
+                        ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)] ring-2 ring-[var(--color-peacock)]/20'
                         : 'border-stone-200 bg-white hover:border-stone-300'
                     }`}
                   >
@@ -294,7 +304,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                   <select
                     value={design.headingFont}
                     onChange={(e) => updateActiveDesign({ headingFont: e.target.value })}
-                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)]"
                   >
                     {GOOGLE_FONT_OPTIONS.map((f) => (
                       <option key={f.name} value={f.name}>
@@ -311,7 +321,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                   <select
                     value={design.bodyFont}
                     onChange={(e) => updateActiveDesign({ bodyFont: e.target.value })}
-                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)]"
                   >
                     {GOOGLE_FONT_OPTIONS.map((f) => (
                       <option key={f.name} value={f.name}>
@@ -387,7 +397,7 @@ export const DesignPreferencesScreen: React.FC = () => {
                         onClick={() => updateActiveDesign({ textAnimation: anim.value })}
                         className={`rounded-xl border p-3 text-left transition-all cursor-pointer ${
                           selected
-                            ? 'border-[#B88B58] bg-[#FAF6EE]'
+                            ? 'border-[var(--color-peacock)] bg-[var(--color-ivory-soft)]'
                             : 'border-stone-200 bg-white hover:border-stone-300'
                         }`}
                       >
@@ -471,11 +481,12 @@ export const DesignPreferencesScreen: React.FC = () => {
                 min={3}
                 max={8}
                 step={1}
+                disabled={hasGeneratedImages}
                 value={design.durationPerScene}
                 onChange={(e) =>
                   updateActiveDesign({ durationPerScene: Number(e.target.value) })
                 }
-                className="w-full accent-[#B88B58] cursor-pointer"
+                className="w-full accent-[var(--color-peacock)] disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
               />
               <div className="flex justify-between text-[11px] text-stone-400 mt-1 tabular-nums">
                 <span>3s (Brisk)</span>
@@ -491,7 +502,7 @@ export const DesignPreferencesScreen: React.FC = () => {
               <select
                 value={design.musicMood}
                 onChange={(e) => updateActiveDesign({ musicMood: e.target.value })}
-                className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[#B88B58]"
+                className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-[var(--color-peacock)]"
               >
                 {MUSIC_MOODS.map((mood) => (
                   <option key={mood} value={mood}>
@@ -506,12 +517,12 @@ export const DesignPreferencesScreen: React.FC = () => {
           <div className="pt-4 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="text-sm font-semibold text-stone-900">
-                Scene Generation Mode
+                Card Creation Mode
               </div>
               <p className="text-xs text-stone-500 mt-0.5">
                 {design.storyDriven
-                  ? 'Story-driven: Generates scenes one after another so visual motifs carry seamlessly across chapters.'
-                  : 'Parallel: Generates all scene artworks simultaneously for faster turnaround.'}
+                  ? 'Story-driven: Creates cards one after another so visual motifs carry seamlessly across chapters.'
+                  : 'Parallel: Creates all card artworks simultaneously for faster turnaround.'}
               </p>
             </div>
 
@@ -553,15 +564,20 @@ export const DesignPreferencesScreen: React.FC = () => {
             <span>Back to Details</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => navigateTo('generating')}
-            className="inline-flex items-center gap-2.5 px-7 py-3.5 text-sm font-medium text-white bg-[#B88B58] hover:bg-[#A27644] rounded-xl shadow-sm transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Generate Invitation</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {!hasGeneratedImages && (
+              <span className="text-xs text-stone-500">1 image credit per card</span>
+            )}
+            <button
+              type="button"
+              onClick={() => navigateTo(hasGeneratedImages ? 'step-3-review' : 'generating')}
+              className="inline-flex items-center gap-2.5 px-7 py-3.5 text-sm font-medium text-white bg-[var(--color-peacock)] hover:bg-[var(--color-peacock-deep)] rounded-xl shadow-sm transition-colors cursor-pointer"
+            >
+              {!hasGeneratedImages && <Sparkles className="w-4 h-4" />}
+              <span>{hasGeneratedImages ? 'Back to Review' : 'Generate Invitation'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </main>

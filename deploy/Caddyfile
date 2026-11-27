@@ -1,0 +1,39 @@
+# Redirect apex domain to www
+skyinvites.in {
+    redir https://{$SITE_DOMAIN:www.skyinvites.in}{uri} permanent
+}
+
+{$SITE_DOMAIN:www.skyinvites.in} {
+    encode gzip zstd
+
+    # HSTS + Report-Only CSP (Google Sign-In, Google Fonts, Razorpay Checkout)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.googleusercontent.com https://*.razorpay.com; frame-src 'self' https://accounts.google.com https://api.razorpay.com https://checkout.razorpay.com; connect-src 'self' https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com; media-src 'self' blob:;"
+    }
+
+    # Long timeout for video generation & export endpoints
+    @video_routes {
+        path /api/generate-video /api/export-video
+    }
+    handle @video_routes {
+        reverse_proxy 127.0.0.1:8000 {
+            transport http {
+                read_timeout 660s
+                write_timeout 660s
+            }
+        }
+    }
+
+    # Proxy all other /api requests to uvicorn on 127.0.0.1:8000
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    # Serve static frontend dist with SPA fallback
+    handle {
+        root * /opt/sky-invites/frontend/dist
+        try_files {path} /index.html
+        file_server
+    }
+}

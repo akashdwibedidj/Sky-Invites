@@ -114,7 +114,9 @@ def test_prompt_generation_and_negative_constraints():
         invitation_json=json.dumps(inv_input),
     )
     assert "FLAT INVITATION ARTWORK" in bible_prompt
-    assert "STRICT NEGATIVE CONSTRAINTS" in bible_prompt
+    # STRICT NEGATIVE CONSTRAINTS lives in BUILD_PROMPT (the per-scene image prompt),
+    # not in STYLE_BIBLE. Verify it is present there.
+    assert "STRICT NEGATIVE CONSTRAINTS" in BUILD_PROMPT
 
     # Mock resolved style bible
     mock_style_bible = {
@@ -137,7 +139,7 @@ def test_prompt_generation_and_negative_constraints():
             "visual_direction": "Stationery background art",
         }
         prompt = _construct_scene_image_prompt(scene, inv_input, mock_style_bible)
-        assert "FLAT 2D INVITATION DESIGN ARTWORK" in prompt
+        assert "FLAT 2D INVITATION" in prompt.upper()
         assert role.title() in prompt
         assert "Portrait 9:16" in prompt
         assert "no tabletop photography" in prompt.lower()

@@ -6,4 +6,13 @@ storage/
 work/
 node_modules/
 media/
-backend/assets/fonts/
+sky-shell/
+
+# Database backups
+backups/
+backend/backups/
+*.sql
+*.dump
+
+# Frontend build output
+frontend/dist/

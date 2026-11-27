@@ -16,7 +16,7 @@ export const NotFoundPage: React.FC = () => {
         onClick={() => navigate('/')}
         className="mt-2 px-5 py-2.5 rounded-xl bg-[#B88B58] text-white text-sm font-medium hover:bg-[#A27644] transition-colors cursor-pointer"
       >
-        ← Back to Dashboard
+        ← Back to Home
       </button>
     </div>
   );

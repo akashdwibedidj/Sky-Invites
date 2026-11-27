@@ -158,6 +158,11 @@ export interface Scene {
   animationPlan: AnimationPlan;
   videoUrl?: string | null;
   animationNote?: string;
+  analyzed?: boolean;
+  imageGenerations?: number;
+  videoGenerations?: number;
+  maxImageGenerations?: number;
+  maxVideoGenerations?: number;
 }
 
 export interface Invitation {
