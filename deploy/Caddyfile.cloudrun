@@ -1,0 +1,21 @@
+:{$PORT:8080} {
+    encode gzip zstd
+
+    # Long timeout for video generation & export endpoints
+    @video_routes {
+        path /api/generate-video /api/export-video
+    }
+    handle @video_routes {
+        reverse_proxy 127.0.0.1:8000 {
+            transport http {
+                read_timeout 660s
+                write_timeout 660s
+            }
+        }
+    }
+
+    # Proxy all other requests to uvicorn on 127.0.0.1:8000
+    handle {
+        reverse_proxy 127.0.0.1:8000
+    }
+}
