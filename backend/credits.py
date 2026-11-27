@@ -192,35 +192,52 @@ def refund_scene_spend(session: Session, scene_row: Scene, user_id: Optional[str
     )
 
 
+_SWEEP_ADVISORY_LOCK_ID = 84729103
+
+
 def sweep_stuck_generating_scenes(timeout_minutes: int = GENERATION_TIMEOUT_MINUTES) -> int:
     """
     Mark scenes stuck in 'generating' longer than timeout_minutes as 'failed'
     and idempotently refund their last_spend_ref.
+    Protected by a PostgreSQL advisory lock so it runs once even if workers restart.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
     swept = 0
     with get_session() as session:
-        stuck_rows = (
-            session.query(Scene)
-            .filter(
-                Scene.status == "generating",
-                Scene.generating_started_at.isnot(None),
-                Scene.generating_started_at < cutoff,
+        got_lock = session.execute(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": _SWEEP_ADVISORY_LOCK_ID},
+        ).scalar()
+        if not got_lock:
+            logger.info("Startup sweep skipped: advisory lock held by another worker.")
+            return 0
+        try:
+            stuck_rows = (
+                session.query(Scene)
+                .filter(
+                    Scene.status == "generating",
+                    Scene.generating_started_at.isnot(None),
+                    Scene.generating_started_at < cutoff,
+                )
+                .with_for_update(skip_locked=True)
+                .all()
             )
-            .with_for_update(skip_locked=True)
-            .all()
-        )
-        for scene_row in stuck_rows:
-            inv = (
-                session.query(Invitation)
-                .filter(Invitation.id == scene_row.invitation_id)
-                .first()
+            for scene_row in stuck_rows:
+                inv = (
+                    session.query(Invitation)
+                    .filter(Invitation.id == scene_row.invitation_id)
+                    .first()
+                )
+                user_id = inv.user_id if inv else None
+                refund_scene_spend(session, scene_row, user_id)
+                scene_row.status = "failed"
+                scene_row.generating_started_at = None
+                swept += 1
+        finally:
+            session.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": _SWEEP_ADVISORY_LOCK_ID},
             )
-            user_id = inv.user_id if inv else None
-            refund_scene_spend(session, scene_row, user_id)
-            scene_row.status = "failed"
-            scene_row.generating_started_at = None
-            swept += 1
     if swept:
         logger.warning(f"Startup sweep marked {swept} stuck generating card(s) as failed and refunded.")
     return swept

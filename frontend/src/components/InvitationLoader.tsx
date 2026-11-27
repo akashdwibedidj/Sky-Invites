@@ -16,7 +16,7 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 import { useInvitations } from '../context/InvitationContext';
 import { getSavedInvitation } from '../services/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 type LoadState = 'loading' | 'ready' | 'error' | 'not-found';
 

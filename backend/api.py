@@ -5,10 +5,12 @@ Plan 4: real auth, ownership checks, signed media URLs.
 """
 
 import concurrent.futures
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
 import re
+import shutil
 import sys
 import uuid
 from pathlib import Path
@@ -18,7 +20,7 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -34,15 +36,30 @@ load_dotenv(BACKEND_DIR / ".env", override=True)
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 from config import (
+    ALLOWED_FONTS,
+    DAILY_ANALYZE_IMAGE_CAP,
+    DAILY_NEW_INVITATIONS_FREE_CAP,
+    DAILY_NEW_INVITATIONS_PAID_CAP,
+    MAX_CREATE_SCENES_RUNS_PER_INVITATION,
     MAX_IMAGE_GENERATIONS_PER_SCENE,
+    MAX_INVITATION_DICT_BYTES,
+    MAX_INVITATION_FIELD_LEN,
+    MAX_REGENERATE_INSTRUCTION_LEN,
     MAX_VIDEO_GENERATIONS_PER_SCENE,
+    RATE_LIMIT_ANALYZE_IMAGE,
+    RATE_LIMIT_CREATE_SCENES,
+    RATE_LIMIT_GENERATE_IMAGES,
+    RATE_LIMIT_GENERATE_VIDEO,
+    RATE_LIMIT_REGENERATE_IMAGE,
     normalize_category,
 )
 from storage import (
     create_invitation,
+    invitation_dir,
     load_state,
     save_state,
     update_scene,
+    validate_invitation_id,
     try_claim_initial_image_generation,
     try_claim_image_regeneration,
     release_image_generation,
@@ -52,7 +69,7 @@ from storage import (
     video_path as get_video_path,
     rel,
 )
-from db import Invitation, Scene, User, create_tables, get_session
+from db import ApiUsageEvent, Invitation, Order, Scene, User, create_tables, get_session
 from sqlalchemy import func
 from graph1.nodes import (
     split_scenes,
@@ -72,7 +89,7 @@ from graph2.nodes import (
 )
 from app.render import render_project
 from app.render.adapter import frontend_to_project
-from auth import sign_media_url, verify_media_signature
+from auth import decode_access_token, sign_media_url, verify_media_signature
 from auth_routes import router as auth_router, get_current_user
 from leads_routes import router as leads_router
 from payment_routes import router as payment_router, validate_razorpay_config
@@ -80,23 +97,101 @@ from payment_routes import router as payment_router, validate_razorpay_config
 logger = logging.getLogger("sky_invites_api")
 logging.basicConfig(level=logging.INFO)
 
+APP_ENV = os.environ.get("APP_ENV", "production").strip().lower() or "production"
+IS_PRODUCTION = APP_ENV == "production"
+
+_PLACEHOLDER_PATTERNS = ("changeme", "placeholder", "your-", "dev-", "example", "replace-me", "secret-key")
+
+
+def _looks_like_placeholder(val: str) -> bool:
+    low = val.strip().lower()
+    return any(p in low for p in _PLACEHOLDER_PATTERNS)
+
+
+def validate_startup_config() -> None:
+    """Validate required keys and production safety invariants at startup."""
+    if not os.environ.get("OPENAI_API_KEY", "").strip():
+        raise RuntimeError("OPENAI_API_KEY environment variable is required.")
+    if not os.environ.get("XAI_API_KEY", "").strip():
+        raise RuntimeError("XAI_API_KEY environment variable is required.")
+
+    if not IS_PRODUCTION:
+        return
+
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "").strip()
+    if not frontend_origin or "localhost" in frontend_origin.lower() or "127.0.0.1" in frontend_origin:
+        raise RuntimeError("FRONTEND_ORIGIN must be set and must not contain localhost in production.")
+
+    for secret_name in ("JWT_SECRET_KEY", "MEDIA_SIGNING_SECRET"):
+        secret_val = os.environ.get(secret_name, "").strip()
+        if len(secret_val) < 32 or _looks_like_placeholder(secret_val):
+            raise RuntimeError(f"{secret_name} must be at least 32 characters and not a placeholder in production.")
+
+    if not os.environ.get("DATABASE_URL", "").strip():
+        raise RuntimeError("DATABASE_URL must be set in production.")
+
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg must be installed and on PATH in production.")
+
+    fonts_dir = BACKEND_DIR / "assets" / "fonts"
+    for family in ALLOWED_FONTS:
+        compact = family.replace(" ", "")
+        regular = fonts_dir / f"{compact}-Regular.ttf"
+        if not regular.is_file():
+            raise RuntimeError(f"Missing required font file for '{family}': {regular}")
+
+
+def _user_rate_key(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        uid = decode_access_token(token)
+        if uid:
+            return f"user:{uid}"
+    return f"ip:{get_remote_address(request)}"
+
+
 # ── Rate limiter ───────────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
+user_limiter = Limiter(key_func=_user_rate_key)
 
-app = FastAPI(title="Sky Invites API", version="1.0.0")
+app = FastAPI(
+    title="Sky Invites API",
+    version="1.0.0",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if IS_PRODUCTION:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 def _on_startup() -> None:
+    validate_startup_config()
     validate_razorpay_config()
     create_tables()
     from credits import sweep_stuck_generating_scenes
     sweep_stuck_generating_scenes()
 
 # ── CORS ───────────────────────────────────────────────────────────────────────
-_raw_origins = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000,http://127.0.0.1:3000")
+_raw_origins = os.environ.get("FRONTEND_ORIGIN", "")
 ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
@@ -119,31 +214,74 @@ MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Request / Response Models ──────────────────────────────────────────────────
 
+def _check_nested_string_lengths(obj: Any, max_len: int) -> None:
+    if isinstance(obj, str):
+        if len(obj) > max_len:
+            raise ValueError(f"Field exceeds maximum length of {max_len} characters")
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(k, str) and len(k) > max_len:
+                raise ValueError(f"Field key exceeds maximum length of {max_len} characters")
+            _check_nested_string_lengths(v, max_len)
+    elif isinstance(obj, list):
+        for item in obj:
+            _check_nested_string_lengths(item, max_len)
+
+
 class CreateScenesRequest(BaseModel):
     invitation: dict[str, Any]
+
+    @field_validator("invitation")
+    @classmethod
+    def validate_invitation_size(cls, v: dict[str, Any]) -> dict[str, Any]:
+        serialized = json.dumps(v, ensure_ascii=False)
+        if len(serialized.encode("utf-8")) > MAX_INVITATION_DICT_BYTES:
+            raise ValueError(f"Invitation payload exceeds {MAX_INVITATION_DICT_BYTES} bytes")
+        _check_nested_string_lengths(v, MAX_INVITATION_FIELD_LEN)
+        return v
 
 
 class GenerateImagesRequest(BaseModel):
     invitation_id: str
     story_driven: bool = False
 
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
+
 
 class RegenerateImageRequest(BaseModel):
     invitation_id: str
     scene_index: int
-    custom_prompt: Optional[str] = None
-    instruction: Optional[str] = None
+    custom_prompt: Optional[str] = Field(default=None, max_length=MAX_INVITATION_FIELD_LEN)
+    instruction: Optional[str] = Field(default=None, max_length=MAX_REGENERATE_INSTRUCTION_LEN)
+
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
 
 
 class AnalyzeImageRequest(BaseModel):
     invitation_id: str
     scene_index: int
-    animation_note: Optional[str] = None
+    animation_note: Optional[str] = Field(default=None, max_length=MAX_INVITATION_FIELD_LEN)
+
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
 
 
 class GenerateVideoRequest(BaseModel):
     invitation_id: str
     scene_index: int
+
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
 
 
 class PatchSceneRequest(BaseModel):
@@ -160,11 +298,24 @@ class ExportVideoRequest(BaseModel):
     transition: Optional[str] = None
     title: Optional[str] = None
 
+    @field_validator("invitation_id")
+    @classmethod
+    def check_id(cls, v: str) -> str:
+        return validate_invitation_id(v)
+
 
 # ── Ownership helper ───────────────────────────────────────────────────────────
 
+def _validate_id_or_400(invitation_id: str) -> str:
+    try:
+        return validate_invitation_id(invitation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid invitation ID")
+
+
 def _load_and_assert_owner(invitation_id: str, user: User) -> dict:
-    """Load invitation state and verify ownership. Raises 404 on any failure."""
+    """Load invitation state and verify ownership. Raises 400 on bad ID, 404 on any failure."""
+    _validate_id_or_400(invitation_id)
     try:
         st = load_state(invitation_id)
     except FileNotFoundError:
@@ -519,7 +670,8 @@ def run_export_video_task(
     transition: Optional[str] = None,
     title: Optional[str] = None,
 ) -> None:
-    export_dir = MEDIA_DIR / invitation_id / "export"
+    inv_folder = invitation_dir(invitation_id)
+    export_dir = inv_folder / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
     status_file = export_dir / "status.json"
     work_dir = export_dir / "work"
@@ -608,7 +760,7 @@ def run_export_video_task(
             "status": "failed",
             "progress": 0,
             "stage": "Export failed",
-            "error": str(exc),
+            "error": "Video export failed. Please try again.",
             "url": None,
             "fileName": None,
             "sizeMb": None,
@@ -633,8 +785,13 @@ def serve_media(
     if not exp or not sig:
         raise HTTPException(status_code=404, detail="Not found")
 
-    # Reject path traversal attempts
-    if ".." in file_path or file_path.startswith("/"):
+    # Validate invitation_id and reject path traversal attempts
+    try:
+        allowed_root = invitation_dir(invitation_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if ".." in file_path or file_path.startswith("/") or "\\" in file_path:
         raise HTTPException(status_code=404, detail="Not found")
 
     # Verify HMAC + expiry
@@ -642,11 +799,10 @@ def serve_media(
         raise HTTPException(status_code=404, detail="Not found")
 
     # Resolve and check the file
-    target = (MEDIA_DIR / invitation_id / file_path).resolve()
-    allowed_root = (MEDIA_DIR / invitation_id).resolve()
+    target = (allowed_root / file_path).resolve()
 
     # Second path-traversal check after resolve
-    if not str(target).startswith(str(allowed_root)):
+    if not target.is_relative_to(allowed_root):
         raise HTTPException(status_code=404, detail="Not found")
 
     if not target.exists() or not target.is_file():
@@ -658,49 +814,85 @@ def serve_media(
 # ── Invitation Endpoints ───────────────────────────────────────────────────────
 
 @app.post("/api/create-scenes", status_code=status.HTTP_202_ACCEPTED)
+@user_limiter.limit(RATE_LIMIT_CREATE_SCENES)
 def create_scenes_endpoint(
+    request: Request,
     req: CreateScenesRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     raw_inv = req.invitation
-    inv_id = str(raw_inv.get("id") or uuid.uuid4().hex[:8])
+    candidate_id = raw_inv.get("id")
+    inv_id: Optional[str] = None
 
-    # Idempotency: if invitation already exists, check ownership
-    try:
-        existing_st = load_state(inv_id)
+    # Honor a client-supplied id ONLY if it is valid, already exists in DB, AND belongs to the caller.
+    if isinstance(candidate_id, str) and candidate_id.strip():
+        try:
+            valid_candidate = validate_invitation_id(candidate_id.strip())
+            with get_session() as session:
+                inv = session.query(Invitation).filter(Invitation.id == valid_candidate).first()
+                if inv and inv.user_id == current_user.id:
+                    inv_id = valid_candidate
+                    existing_st = load_state(inv_id)
+                    if existing_st.get("scenes"):
+                        return {
+                            "invitation_id": inv_id,
+                            "status": existing_st.get("status", "stage1_done"),
+                            "existing": True,
+                        }
+                    if (inv.create_scenes_count or 0) >= MAX_CREATE_SCENES_RUNS_PER_INVITATION:
+                        raise HTTPException(
+                            status_code=429,
+                            detail="Maximum scene generation re-runs reached for this invitation.",
+                        )
+                    inv.create_scenes_count = (inv.create_scenes_count or 0) + 1
+        except ValueError:
+            pass
+
+    if inv_id is None:
+        # Ignore any unknown/unowned/orphan client id and generate a fresh server-side uuid4 hex.
+        inv_id = uuid.uuid4().hex
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        with get_session() as session:
+            has_paid = (
+                session.query(Order.id)
+                .filter(Order.user_id == current_user.id, Order.status == "paid")
+                .first()
+                is not None
+            )
+            daily_cap = DAILY_NEW_INVITATIONS_PAID_CAP if has_paid else DAILY_NEW_INVITATIONS_FREE_CAP
+            created_24h = (
+                session.query(func.count(Invitation.id))
+                .filter(Invitation.user_id == current_user.id, Invitation.created_at >= since)
+                .scalar()
+                or 0
+            )
+            if created_24h >= daily_cap:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Daily invitation limit reached ({daily_cap}/day).",
+                )
+
+        backend_input = frontend_to_backend_input(raw_inv)
+        backend_input["frontend_invitation"] = raw_inv
+        create_invitation(inv_id, backend_input)
         with get_session() as session:
             inv = session.query(Invitation).filter(Invitation.id == inv_id).first()
             if inv:
-                if inv.user_id is not None and inv.user_id != current_user.id:
-                    # This ID belongs to another user — treat as not found
-                    raise HTTPException(status_code=404, detail="Invitation not found")
-        if existing_st.get("scenes"):
-            return {
-                "invitation_id": inv_id,
-                "status": existing_st.get("status", "stage1_done"),
-                "existing": True,
-            }
-    except FileNotFoundError:
-        pass
-
-    backend_input = frontend_to_backend_input(raw_inv)
-    backend_input["frontend_invitation"] = raw_inv
-
-    create_invitation(inv_id, backend_input)
-
-    # Stamp the owner
-    with get_session() as session:
-        inv = session.query(Invitation).filter(Invitation.id == inv_id).first()
-        if inv and inv.user_id is None:
-            inv.user_id = current_user.id
+                inv.user_id = current_user.id
+                inv.create_scenes_count = 1
+    else:
+        backend_input = frontend_to_backend_input(raw_inv)
+        backend_input["frontend_invitation"] = raw_inv
 
     background_tasks.add_task(run_create_scenes_task, inv_id, backend_input)
     return {"invitation_id": inv_id, "status": "running"}
 
 
 @app.post("/api/generate-images", status_code=status.HTTP_202_ACCEPTED)
+@user_limiter.limit(RATE_LIMIT_GENERATE_IMAGES)
 def generate_images_endpoint(
+    request: Request,
     req: GenerateImagesRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -736,7 +928,9 @@ def generate_images_endpoint(
 
 
 @app.post("/api/regenerate-image", status_code=status.HTTP_202_ACCEPTED)
+@user_limiter.limit(RATE_LIMIT_REGENERATE_IMAGE)
 def regenerate_image_endpoint(
+    request: Request,
     req: RegenerateImageRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -768,7 +962,9 @@ def regenerate_image_endpoint(
 
 
 @app.post("/api/analyze-image")
+@user_limiter.limit(RATE_LIMIT_ANALYZE_IMAGE)
 def analyze_image_endpoint(
+    request: Request,
     req: AnalyzeImageRequest,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -782,6 +978,25 @@ def analyze_image_endpoint(
         plan["shouldMove"] = format_should_move_as_strings(plan.get("shouldMove", []))
         return plan
 
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    with get_session() as session:
+        used_24h = (
+            session.query(func.count(ApiUsageEvent.id))
+            .filter(
+                ApiUsageEvent.user_id == current_user.id,
+                ApiUsageEvent.endpoint == "analyze-image",
+                ApiUsageEvent.created_at >= since,
+            )
+            .scalar()
+            or 0
+        )
+        if used_24h >= DAILY_ANALYZE_IMAGE_CAP:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily image analysis limit reached ({DAILY_ANALYZE_IMAGE_CAP}/day).",
+            )
+        session.add(ApiUsageEvent(user_id=current_user.id, endpoint="analyze-image"))
+
     try:
         plan = analyze_one_scene(req.invitation_id, req.scene_index, req.animation_note)
         update_scene(req.invitation_id, req.scene_index, analyzed=True)
@@ -790,11 +1005,13 @@ def analyze_image_endpoint(
         raise HTTPException(status_code=404, detail="Invitation or card image not found")
     except Exception as exc:
         logger.error(f"analyze-image error: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Image analysis failed. Please try again.")
 
 
 @app.post("/api/generate-video", status_code=status.HTTP_202_ACCEPTED)
+@user_limiter.limit(RATE_LIMIT_GENERATE_VIDEO)
 def generate_video_endpoint(
+    request: Request,
     req: GenerateVideoRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -1032,7 +1249,7 @@ def get_export_status(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     _load_and_assert_owner(invitation_id, current_user)
-    status_file = MEDIA_DIR / invitation_id / "export" / "status.json"
+    status_file = invitation_dir(invitation_id) / "export" / "status.json"
     if not status_file.exists():
         return {
             "status": "idle",
@@ -1055,7 +1272,7 @@ def get_export_status(
             "status": "failed",
             "progress": 0,
             "stage": "Status read error",
-            "error": str(e),
+            "error": "Could not read export status.",
             "url": None,
             "fileName": None,
             "sizeMb": None,

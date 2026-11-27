@@ -24,6 +24,7 @@ from auth import (
     verify_google_id_token,
     verify_password,
 )
+from config import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, RATE_LIMIT_GOOGLE_AUTH
 from db import User, get_session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -115,6 +116,11 @@ def signup(request: Request, req: SignupRequest):
 
     if not email or not name or not req.password:
         raise HTTPException(status_code=422, detail="Name, email, and password are required.")
+    if len(req.password) < PASSWORD_MIN_LENGTH or len(req.password) > PASSWORD_MAX_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Password must be between {PASSWORD_MIN_LENGTH} and {PASSWORD_MAX_LENGTH} characters.",
+        )
 
     with get_session() as session:
         existing = session.query(User).filter(User.email == email).first()
@@ -157,7 +163,8 @@ def login(request: Request, req: LoginRequest):
 
 
 @router.post("/google", response_model=AuthResponse)
-def google_login(req: GoogleAuthRequest):
+@_limiter.limit(RATE_LIMIT_GOOGLE_AUTH)
+def google_login(request: Request, req: GoogleAuthRequest):
     if not req.idToken:
         raise HTTPException(status_code=422, detail="idToken is required.")
 

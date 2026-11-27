@@ -349,7 +349,7 @@ export const COPY = {
     emailLabel: 'Email address',
     emailPlaceholder: 'meera@example.com',
     passwordLabel: 'Password',
-    passwordPlaceholder: 'At least 6 characters',
+    passwordPlaceholder: 'At least 8 characters',
     accountTypeLabel: "I'm signing up as",
     accountTypeOptional: '(optional)',
     accountTypeIndividual: 'Individual or family',
@@ -366,7 +366,7 @@ export const COPY = {
     errors: {
       missingName: 'Please enter your name so we know what to call you.',
       invalidEmail: "That email address doesn't look right. Please check and try again.",
-      shortPassword: 'Please choose a password with at least 6 characters.',
+      shortPassword: 'Please choose a password between 8 and 128 characters.',
       genericAuth: "That email or password doesn't look right. Please try again.",
       googleAuth: "We couldn't finish signing in with Google. Please try again.",
     },

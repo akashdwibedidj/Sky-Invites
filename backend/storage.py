@@ -3,6 +3,7 @@
 # Generated images and videos stay on disk in media/<invitation_id>/.
 # ─────────────────────────────────────────────────────────────────────────────
 
+import re
 from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -13,23 +14,40 @@ from db import Invitation, Scene, get_session
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MEDIA_DIR = PROJECT_ROOT / "media"
 
+INVITATION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def validate_invitation_id(invitation_id: str) -> str:
+    if not isinstance(invitation_id, str) or not INVITATION_ID_PATTERN.fullmatch(invitation_id):
+        raise ValueError(f"Invalid invitation_id: {invitation_id!r}")
+    return invitation_id
+
+
+def _ensure_within_media_dir(path: Path) -> Path:
+    base = MEDIA_DIR.resolve()
+    resolved = path.resolve()
+    if resolved == base or not resolved.is_relative_to(base):
+        raise ValueError(f"Path escapes MEDIA_DIR: {resolved}")
+    return resolved
+
 
 # ── Path helpers ──────────────────────────────────────────────────────────────
 
 def invitation_dir(invitation_id: str) -> Path:
-    return MEDIA_DIR / invitation_id
+    validate_invitation_id(invitation_id)
+    return _ensure_within_media_dir(MEDIA_DIR / invitation_id)
 
 
 def state_path(invitation_id: str) -> Path:
-    return invitation_dir(invitation_id) / "state.json"
+    return _ensure_within_media_dir(invitation_dir(invitation_id) / "state.json")
 
 
 def image_path(invitation_id: str, scene_index: int) -> Path:
-    return invitation_dir(invitation_id) / f"scene_{scene_index}.png"
+    return _ensure_within_media_dir(invitation_dir(invitation_id) / f"scene_{int(scene_index)}.png")
 
 
 def video_path(invitation_id: str, scene_index: int) -> Path:
-    return invitation_dir(invitation_id) / f"scene_{scene_index}.mp4"
+    return _ensure_within_media_dir(invitation_dir(invitation_id) / f"scene_{int(scene_index)}.mp4")
 
 
 def rel(path: Path) -> str:

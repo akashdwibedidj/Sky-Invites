@@ -18,7 +18,7 @@ import {
   ThemeStyle,
 } from '../types/invitation';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 let currentInvitationId: string = '';
 

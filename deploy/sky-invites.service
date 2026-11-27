@@ -1,0 +1,19 @@
+[Unit]
+Description=Sky Invites FastAPI Backend
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=skyinvites
+Group=skyinvites
+WorkingDirectory=/opt/sky-invites/backend
+EnvironmentFile=/etc/sky-invites/backend.env
+ExecStart=/opt/sky-invites/.venv/bin/uvicorn api:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

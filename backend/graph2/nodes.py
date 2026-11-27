@@ -14,7 +14,7 @@ from typing import Any
 from openai import OpenAI
 from langsmith.wrappers import wrap_openai
 
-from config import VISION_LLM_MODEL
+from config import OPENAI_TEXT_TIMEOUT_SECONDS, VISION_LLM_MODEL
 from prompts import ANALYZE_IMAGE, ANIMATION_NOTE_SECTION
 from storage import PROJECT_ROOT, rel, load_state, save_state
 from storage import video_path as vid_path
@@ -22,7 +22,11 @@ import grok
 
 logger = logging.getLogger("graph2.nodes")
 
-_client = wrap_openai(OpenAI(api_key=os.environ["OPENAI_API_KEY"]))
+_openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+if not _openai_api_key:
+    raise RuntimeError("OPENAI_API_KEY environment variable is required.")
+
+_client = wrap_openai(OpenAI(api_key=_openai_api_key, timeout=OPENAI_TEXT_TIMEOUT_SECONDS))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -38,6 +42,7 @@ def _vision(prompt: str, image_b64: str) -> str:
                 {"type": "input_image", "image_url": f"data:image/png;base64,{image_b64}"},
             ],
         }],
+        timeout=OPENAI_TEXT_TIMEOUT_SECONDS,
     )
     return resp.output_text.strip()
 

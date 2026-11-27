@@ -26,6 +26,9 @@ from config import (
     IMAGE_FINAL_SIZE,
     IMAGE_QUALITY,
     ALLOWED_FONTS,
+    OPENAI_TEXT_TIMEOUT_SECONDS,
+    OPENAI_IMAGE_TIMEOUT_SECONDS,
+    HTTP_DOWNLOAD_TIMEOUT_SECONDS,
     normalize_category,
     get_category_rules,
     build_identity_data,
@@ -37,10 +40,14 @@ from storage import image_path as img_path, rel, load_state, save_state
 
 logger = logging.getLogger("graph1.nodes")
 
+_openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+if not _openai_api_key:
+    raise RuntimeError("OPENAI_API_KEY environment variable is required.")
+
 # wrap_openai patches the client so every responses.create / images.generate
 # call is automatically traced to LangSmith. Tracing is controlled by the
 # LANGSMITH_TRACING env var — set it to "false" to disable without code changes.
-_client = wrap_openai(OpenAI(api_key=os.environ["OPENAI_API_KEY"]))
+_client = wrap_openai(OpenAI(api_key=_openai_api_key, timeout=OPENAI_TEXT_TIMEOUT_SECONDS))
 
 
 # ── LLM helpers ───────────────────────────────────────────────────────────────
@@ -50,6 +57,7 @@ def _llm(prompt: str) -> str:
     resp = _client.responses.create(
         model=TEXT_LLM_MODEL,
         input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        timeout=OPENAI_TEXT_TIMEOUT_SECONDS,
     )
     return resp.output_text.strip()
 
@@ -65,6 +73,7 @@ def _vision(prompt: str, image_b64: str) -> str:
                 {"type": "input_image", "image_url": f"data:image/png;base64,{image_b64}"},
             ],
         }],
+        timeout=OPENAI_TEXT_TIMEOUT_SECONDS,
     )
     return resp.output_text.strip()
 
@@ -103,13 +112,19 @@ def _generate_one_image(prompt: str, out_path: Path, prev_b64: str | None = None
         prompt=prompt,
         size=IMAGE_SIZE,
         quality=IMAGE_QUALITY,
+        timeout=OPENAI_IMAGE_TIMEOUT_SECONDS,
     )
     item = resp.data[0]
     if getattr(item, "b64_json", None):
         raw = base64.b64decode(item.b64_json)
     elif getattr(item, "url", None):
         import requests
-        raw = requests.get(item.url).content
+        from urllib.parse import urlparse
+        if urlparse(item.url).scheme != "https":
+            raise ValueError("Image download URL must use HTTPS.")
+        dl = requests.get(item.url, timeout=HTTP_DOWNLOAD_TIMEOUT_SECONDS)
+        dl.raise_for_status()
+        raw = dl.content
     else:
         raise ValueError(f"Unexpected image response format: {item}")
     img = Image.open(BytesIO(raw))

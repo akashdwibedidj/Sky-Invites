@@ -112,7 +112,7 @@ export function AuthPage({ mode }: AuthPageProps) {
       setError(COPY.auth.errors.invalidEmail);
       return;
     }
-    if (password.length < 6) {
+    if (password.length < 8 || password.length > 128) {
       setError(COPY.auth.errors.shortPassword);
       return;
     }

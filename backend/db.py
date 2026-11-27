@@ -49,6 +49,16 @@ class Invitation(Base):
     user_input = Column(JSONB, nullable=False)
     style_bible = Column(JSONB, nullable=True)
     status = Column(String(50), nullable=True, default="pending")
+    create_scenes_count = Column(Integer, nullable=False, server_default="0", default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ApiUsageEvent(Base):
+    __tablename__ = "api_usage_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(64), nullable=False, index=True)
+    endpoint = Column(String(64), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -187,6 +197,9 @@ def create_tables() -> None:
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS analyzed BOOLEAN NOT NULL DEFAULT FALSE"))
         # Plan 4: user_id on invitations (nullable — existing rows stay NULL/orphaned)
         conn.execute(text("ALTER TABLE invitations ADD COLUMN IF NOT EXISTS user_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL"))
+        # Cost caps: create_scenes_count + api_usage_events
+        conn.execute(text("ALTER TABLE invitations ADD COLUMN IF NOT EXISTS create_scenes_count INTEGER NOT NULL DEFAULT 0"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_api_usage_events_user_endpoint_created ON api_usage_events (user_id, endpoint, created_at)"))
         # Credits & ledger: spend reference & timeout tracking on scenes
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS last_spend_ref VARCHAR(128)"))
         conn.execute(text("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS generating_started_at TIMESTAMPTZ"))

@@ -5,6 +5,10 @@ import numpy as np
 import pytest
 from PIL import Image, ImageChops
 
+import sys
+from pathlib import Path
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_test_clip import make_clip
 from app.render import Canvas, Project, Scene, TextLayer, render_project
 from app.render.media import probe

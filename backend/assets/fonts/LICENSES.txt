@@ -1,0 +1,17 @@
+Sky Invites — Font Licences
+===========================
+
+All 9 font families (18 TTF files) in this directory are open-source Google Fonts
+distributed under the SIL Open Font License, Version 1.1 (OFL-1.1):
+https://scripts.sil.org/OFL
+
+Families included (Regular + Bold):
+- Bodoni Moda (BodoniModa-Regular.ttf, BodoniModa-Bold.ttf) — SIL OFL 1.1
+- Cinzel (Cinzel-Regular.ttf, Cinzel-Bold.ttf) — SIL OFL 1.1
+- Cormorant Garamond (CormorantGaramond-Regular.ttf, CormorantGaramond-Bold.ttf) — SIL OFL 1.1
+- DM Sans (DMSans-Regular.ttf, DMSans-Bold.ttf) — SIL OFL 1.1
+- Fraunces (Fraunces-Regular.ttf, Fraunces-Bold.ttf) — SIL OFL 1.1
+- Inter (Inter-Regular.ttf, Inter-Bold.ttf) — SIL OFL 1.1
+- Lora (Lora-Regular.ttf, Lora-Bold.ttf) — SIL OFL 1.1
+- Playfair Display (PlayfairDisplay-Regular.ttf, PlayfairDisplay-Bold.ttf) — SIL OFL 1.1
+- Plus Jakarta Sans (PlusJakartaSans-Regular.ttf, PlusJakartaSans-Bold.ttf) — SIL OFL 1.1

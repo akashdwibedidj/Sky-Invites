@@ -26,6 +26,34 @@ VIDEO_RESOLUTION = "480p"          # "480p" | "720p" | "1080p"
 MAX_IMAGE_GENERATIONS_PER_SCENE = 2  # 1 initial generation + 1 regeneration
 MAX_VIDEO_GENERATIONS_PER_SCENE = 1  # 1 video generation per card, no regeneration
 
+# ── Timeouts & download caps ──────────────────────────────────────────────────
+OPENAI_TEXT_TIMEOUT_SECONDS = 90
+OPENAI_IMAGE_TIMEOUT_SECONDS = 180
+XAI_VIDEO_TIMEOUT_SECONDS = 600
+HTTP_DOWNLOAD_TIMEOUT_SECONDS = 60
+VIDEO_DOWNLOAD_MAX_BYTES = 100 * 1024 * 1024  # 100 MB
+
+# ── Rate limits & cost caps ───────────────────────────────────────────────────
+RATE_LIMIT_GOOGLE_AUTH = "10/minute"
+RATE_LIMIT_RAZORPAY_WEBHOOK = "120/minute"
+RATE_LIMIT_CREATE_SCENES = "10/minute"
+RATE_LIMIT_ANALYZE_IMAGE = "20/minute"
+RATE_LIMIT_GENERATE_IMAGES = "10/minute"
+RATE_LIMIT_REGENERATE_IMAGE = "15/minute"
+RATE_LIMIT_GENERATE_VIDEO = "5/minute"
+
+DAILY_ANALYZE_IMAGE_CAP = 60
+MAX_CREATE_SCENES_RUNS_PER_INVITATION = 3
+DAILY_NEW_INVITATIONS_FREE_CAP = 5
+DAILY_NEW_INVITATIONS_PAID_CAP = 20
+
+# ── Request & password size limits ────────────────────────────────────────────
+MAX_INVITATION_DICT_BYTES = 32768
+MAX_INVITATION_FIELD_LEN = 2000
+MAX_REGENERATE_INSTRUCTION_LEN = 1000
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+
 # ── Typography ────────────────────────────────────────────────────────────────
 # layout_text must pick fonts ONLY from this list.
 ALLOWED_FONTS = [

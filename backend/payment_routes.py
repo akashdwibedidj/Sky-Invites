@@ -26,6 +26,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auth_routes import get_current_user
+from config import HTTP_DOWNLOAD_TIMEOUT_SECONDS, RATE_LIMIT_RAZORPAY_WEBHOOK
 from db import Order, User, get_session
 from pricing_config import PLANS_BY_ID, get_effective_pack_amount_paise
 
@@ -298,6 +299,7 @@ def verify_payment(
 
 
 @router.post("/api/payments/webhook")
+@_limiter.limit(RATE_LIMIT_RAZORPAY_WEBHOOK)
 async def razorpay_webhook(request: Request) -> dict[str, str]:
     raw_body = await request.body()
     signature = request.headers.get("X-Razorpay-Signature", "")
