@@ -7,10 +7,10 @@ import pytest
 
 TESTS_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = TESTS_DIR.parent
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+SCRIPTS_DIR = BACKEND_DIR / "scripts"
+for _p in (TESTS_DIR, SCRIPTS_DIR, BACKEND_DIR):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 
 def _validate_test_db_url() -> str:
