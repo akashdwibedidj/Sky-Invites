@@ -404,11 +404,14 @@ export const COPY = {
 
   contactPage: {
     eyebrow: 'Contact us',
-    heading: 'We would love to hear from you',
+    heading: 'Sky Invites',
     subline:
-      'Have a question about an invitation, early access, or creating invites for clients? Send us a message and we will reply within one working day.',
-    emailAddress: 'hello@skyinvites.com',
-    whatsappNote: 'WhatsApp support opens alongside video invitations',
+      'Have a question about an invitation, early access, or creating invites for clients? Send us a message and we will reply within 2 to 4 working days.',
+    emailAddress: 'skyinvitesofficial@gmail.com',
+    phoneNumber: '+918594866910',
+    phoneDisplay: '+91 8594866910, Monday to Saturday, 10am to 6pm IST',
+    address: 'Old Town, Bhubaneswar, Odisha 751002, India',
+    replyTime: 'We reply within 2 to 4 working days.',
     nameLabel: 'Your name',
     namePlaceholder: 'Rohan Verma',
     emailLabel: 'Email address',
@@ -429,7 +432,7 @@ export const COPY = {
     errorRequired: 'Please enter your name, subject, and message.',
     errorEmail: "That email address doesn't look right. Please check and try again.",
     errorFallback: "We couldn't send your message right now. Please try again.",
-    successMessage: 'Thank you for writing to us. We will reply within one working day.',
+    successMessage: 'Thank you for writing to us. We will reply within 2 to 4 working days.',
   },
 
   protectedRoute: {
@@ -440,55 +443,147 @@ export const COPY = {
     backHome: 'Back to home',
     terms: {
       title: 'Terms of Service',
-      updated: 'Draft notice · [placeholder to be reviewed]',
+      updated: 'Last updated: 27/11/2026',
       sections: [
         {
-          heading: '1. Using Sky Invites [placeholder to be reviewed]',
-          body: 'Sky Invites helps individuals and businesses create personalized image invitations today and video invitations as they launch. By creating an account or making an invitation, you agree to use the service respectfully for real personal or client events. [placeholder to be reviewed]',
+          heading: 'Who we are',
+          body: 'Sky Invites is run by Akash Dwibedi, Bhubaneswar, India. Contact: skyinvitesofficial@gmail.com.',
         },
         {
-          heading: '2. Your words and invitations [placeholder to be reviewed]',
-          body: 'You keep full rights to the names, event details, and invitation downloads you create for your celebration or your clients. Please only submit names and details you have permission to share. [placeholder to be reviewed]',
+          heading: 'The service',
+          body: 'You describe your event, and we create invitation images and videos for you to edit, download and share.',
         },
         {
-          heading: '3. Free trial and upcoming video features [placeholder to be reviewed]',
-          body: 'Image invitations are free to try right now. Video invitations and business plans marked as coming soon will roll out with clear pricing shown before you ever pay. [placeholder to be reviewed]',
+          heading: 'Your account',
+          body: 'You must give correct details and keep your password safe. You are responsible for activity on your account.',
+        },
+        {
+          heading: 'Credits and prices',
+          body: 'Prices are in Indian rupees and shown before you pay. Credits are added to your account immediately after payment is confirmed, and invitations are available to download in your account. Credits never expire. Prices may change, but not for credits you have already bought.',
+        },
+        {
+          heading: 'Limits',
+          body: 'Each card allows one regeneration of its image and one video generation. We may change these limits for future purchases.',
+        },
+        {
+          heading: 'Your content',
+          body: 'You own the names, text and details you provide. You give us permission to use them only to create and deliver your invitations. You must not submit anything unlawful, hateful, or about someone without your right to use it.',
+        },
+        {
+          heading: 'Your invitations',
+          body: 'You may use the downloaded invitations for your own events and, if you are a business, for your clients. The results are generated, so they may not be unique and you may not get exactly what you imagined.',
+        },
+        {
+          heading: 'Acceptable use',
+          body: 'Do not misuse the service, try to break it, or resell access to it.',
+        },
+        {
+          heading: 'Availability',
+          body: 'We work to keep the service running but cannot promise it will always be available. Generation can occasionally fail, and in that case you are not charged.',
+        },
+        {
+          heading: 'Liability',
+          body: 'To the extent the law allows, our liability is limited to the amount you paid for the affected order. We are not responsible for losses from third parties, such as the people you send invitations to.',
+        },
+        {
+          heading: 'Changes and ending',
+          body: 'We may update these terms, and we will show the date above. We may suspend accounts that break these terms.',
+        },
+        {
+          heading: 'Law and disputes',
+          body: 'These terms follow Indian law. Courts at Bhubaneswar have jurisdiction.',
         },
       ],
     },
     privacy: {
       title: 'Privacy Policy',
-      updated: 'Draft notice · [placeholder to be reviewed]',
+      updated: 'Last updated: 27/11/2026',
       sections: [
         {
-          heading: '1. What we collect [placeholder to be reviewed]',
-          body: 'When you sign up, join our waitlist, or send a business enquiry, we collect only the details needed to help you—such as your name, email address, optional WhatsApp number, and the celebration text you enter. [placeholder to be reviewed]',
+          heading: 'What we collect',
+          body: 'Your name, email, sign-in details (a password is stored only in hashed form, or your Google account name and email if you use Google sign-in), the event details and wording you enter, the invitations created, and your order and credit history.',
         },
         {
-          heading: '2. How your information is used [placeholder to be reviewed]',
-          body: 'We use your details solely to create your invitations, reply to your enquiries, and let you know when video invitations launch. We never sell your personal details or guest information to anyone. [placeholder to be reviewed]',
+          heading: 'Forms',
+          body: 'If you join early access or write to us, we keep your name, email and message so we can reply.',
         },
         {
-          heading: '3. Updating or removing your data [placeholder to be reviewed]',
-          body: 'You can ask us to update or delete your account and saved invitations anytime by messaging us on the Contact page. [placeholder to be reviewed]',
+          heading: 'Payments',
+          body: 'Payments are handled by Razorpay. We do not see or store your card, UPI or bank details. We keep the order ID, amount and status.',
+        },
+        {
+          heading: 'Why we use it',
+          body: 'To create your invitations, run your account, process payments, give support, and keep the service safe.',
+        },
+        {
+          heading: 'Who we share it with',
+          body: 'Service providers that help us run Sky Invites: Google (sign-in), Razorpay, and OpenAI and xAI, which help us create images and videos. Your event details are sent to them only to deliver your invitation. We do not sell your data.',
+        },
+        {
+          heading: 'Storage and security',
+          body: 'Your invitations are visible only to your account. We protect data with access controls and encryption in transit. No system is perfectly secure.',
+        },
+        {
+          heading: 'How long we keep it',
+          body: 'Account data is kept until you delete your account, and payment records for as long as Indian law requires.',
+        },
+        {
+          heading: 'Your choices',
+          body: 'You can ask to see, correct or delete your data by writing to skyinvitesofficial@gmail.com. We will respond within 30 days.',
+        },
+        {
+          heading: 'Cookies',
+          body: 'We use only the browser storage needed to keep you signed in.',
+        },
+        {
+          heading: 'Children',
+          body: 'The service is for adults.',
+        },
+        {
+          heading: 'Grievance contact',
+          body: 'Akash Dwibedi, skyinvitesofficial@gmail.com.',
+        },
+        {
+          heading: 'Changes',
+          body: 'We will show updates and the date here.',
         },
       ],
     },
     refund: {
-      title: 'Refund & Cancellation Policy',
-      updated: 'Draft notice · [placeholder to be reviewed]',
+      title: 'Refund and Cancellation Policy',
+      updated: 'Last updated: 27/11/2026',
       sections: [
         {
-          heading: '1. Free image invitations [placeholder to be reviewed]',
-          body: 'Image invitations are free to try right now with no card required, so no charges apply while you explore. [placeholder to be reviewed]',
+          heading: 'Credits',
+          body: 'You buy credits to create invitation images and videos. Credits never expire.',
         },
         {
-          heading: '2. Future video purchases [placeholder to be reviewed]',
-          body: 'Once paid video invitations launch, if a technical problem stops your video from working as promised, you will receive a full refund or a fresh replacement within 7 days of purchase. [placeholder to be reviewed]',
+          heading: 'Free credits',
+          body: 'The 2 free image credits given to new accounts have no cash value and cannot be refunded.',
         },
         {
-          heading: '3. Business subscriptions [placeholder to be reviewed]',
-          body: 'When business plans open, monthly plans can be cancelled anytime before the next renewal date, and you keep access until the end of your current period. [placeholder to be reviewed]',
+          heading: 'Failed creations',
+          body: 'If an image or video fails to generate, you are not charged. The credit is returned to your account automatically.',
+        },
+        {
+          heading: 'Unused purchases',
+          body: 'If you have not used any credits from a purchase, you can ask for a refund within 7 days of payment. Write to skyinvitesofficial@gmail.com with your order ID.',
+        },
+        {
+          heading: 'Used credits',
+          body: 'Once any credit from a purchase has been used, that purchase is not refundable, because the work has been delivered.',
+        },
+        {
+          heading: 'Problems with your result',
+          body: 'If something is wrong with a delivered invitation, write to us within 7 days and we will look into it.',
+        },
+        {
+          heading: 'How refunds are paid',
+          body: 'Approved refunds go back to the original payment method within 5 to 7 working days of approval, depending on your bank.',
+        },
+        {
+          heading: 'Cancellation',
+          body: 'There are no subscriptions, so there is nothing to cancel.',
         },
       ],
     },

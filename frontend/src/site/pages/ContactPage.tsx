@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Mail, MessageCircle } from 'lucide-react';
+import { CheckCircle2, Mail, MapPin, Phone } from 'lucide-react';
 import { COPY } from '../content/copy';
 import * as api from '../services/siteApi';
 
@@ -64,14 +64,29 @@ export function ContactPage() {
           </p>
 
           <div className="mt-8 space-y-4 border-t border-hairline pt-6 text-sm text-ink-muted">
-            <div className="flex items-center gap-3">
-              <Mail className="h-4 w-4 text-gold-dark" />
-              <span>{COPY.contactPage.emailAddress}</span>
+            <div className="flex items-start gap-3">
+              <Mail className="mt-0.5 h-4 w-4 shrink-0 text-gold-dark" />
+              <a
+                href={`mailto:${COPY.contactPage.emailAddress}`}
+                className="text-peacock underline underline-offset-2 hover:text-gold-dark"
+              >
+                {COPY.contactPage.emailAddress}
+              </a>
             </div>
-            <div className="flex items-center gap-3">
-              <MessageCircle className="h-4 w-4 text-gold-dark" />
-              <span>{COPY.contactPage.whatsappNote}</span>
+            <div className="flex items-start gap-3">
+              <Phone className="mt-0.5 h-4 w-4 shrink-0 text-gold-dark" />
+              <a
+                href={`tel:${COPY.contactPage.phoneNumber}`}
+                className="text-peacock underline underline-offset-2 hover:text-gold-dark"
+              >
+                {COPY.contactPage.phoneDisplay}
+              </a>
             </div>
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold-dark" />
+              <span>{COPY.contactPage.address}</span>
+            </div>
+            <p className="pt-2 text-xs text-ink-muted">{COPY.contactPage.replyTime}</p>
           </div>
         </div>
 

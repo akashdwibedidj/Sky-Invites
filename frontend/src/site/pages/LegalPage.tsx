@@ -7,6 +7,26 @@ interface LegalPageProps {
   type: 'terms' | 'privacy' | 'refund';
 }
 
+const CONTACT_EMAIL = 'skyinvitesofficial@gmail.com';
+
+function renderBodyWithEmail(body: string) {
+  if (!body.includes(CONTACT_EMAIL)) return body;
+  const parts = body.split(CONTACT_EMAIL);
+  return parts.map((part, idx) => (
+    <React.Fragment key={idx}>
+      {part}
+      {idx < parts.length - 1 && (
+        <a
+          href={`mailto:${CONTACT_EMAIL}`}
+          className="text-peacock underline underline-offset-2 hover:text-gold-dark"
+        >
+          {CONTACT_EMAIL}
+        </a>
+      )}
+    </React.Fragment>
+  ));
+}
+
 export function LegalPage({ type }: LegalPageProps) {
   const doc = COPY.legal[type];
 
@@ -29,7 +49,7 @@ export function LegalPage({ type }: LegalPageProps) {
             <div key={section.heading}>
               <h2 className="font-site-serif text-2xl font-semibold text-peacock">{section.heading}</h2>
               <p className="mt-2 text-sm leading-relaxed text-ink-muted sm:text-base">
-                {section.body}
+                {renderBodyWithEmail(section.body)}
               </p>
             </div>
           ))}
