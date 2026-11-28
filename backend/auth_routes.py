@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-_limiter = Limiter(key_func=get_remote_address)
+_limiter = Limiter(key_func=get_remote_address, enabled=False)
 
 from auth import (
     create_access_token,

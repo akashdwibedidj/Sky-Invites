@@ -151,9 +151,9 @@ def _user_rate_key(request: Request) -> str:
     return f"ip:{get_remote_address(request)}"
 
 
-# ── Rate limiter ───────────────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address)
-user_limiter = Limiter(key_func=_user_rate_key)
+# ── Rate limiter (disabled for now) ────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address, enabled=False)
+user_limiter = Limiter(key_func=_user_rate_key, enabled=False)
 
 app = FastAPI(
     title="Sky Invites API",
@@ -840,11 +840,6 @@ def create_scenes_endpoint(
                             "status": existing_st.get("status", "stage1_done"),
                             "existing": True,
                         }
-                    if (inv.create_scenes_count or 0) >= MAX_CREATE_SCENES_RUNS_PER_INVITATION:
-                        raise HTTPException(
-                            status_code=429,
-                            detail="Maximum scene generation re-runs reached for this invitation.",
-                        )
                     inv.create_scenes_count = (inv.create_scenes_count or 0) + 1
         except ValueError:
             pass
@@ -852,26 +847,6 @@ def create_scenes_endpoint(
     if inv_id is None:
         # Ignore any unknown/unowned/orphan client id and generate a fresh server-side uuid4 hex.
         inv_id = uuid.uuid4().hex
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
-        with get_session() as session:
-            has_paid = (
-                session.query(Order.id)
-                .filter(Order.user_id == current_user.id, Order.status == "paid")
-                .first()
-                is not None
-            )
-            daily_cap = DAILY_NEW_INVITATIONS_PAID_CAP if has_paid else DAILY_NEW_INVITATIONS_FREE_CAP
-            created_24h = (
-                session.query(func.count(Invitation.id))
-                .filter(Invitation.user_id == current_user.id, Invitation.created_at >= since)
-                .scalar()
-                or 0
-            )
-            if created_24h >= daily_cap:
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Daily invitation limit reached ({daily_cap}/day).",
-                )
 
         backend_input = frontend_to_backend_input(raw_inv)
         backend_input["frontend_invitation"] = raw_inv
@@ -978,23 +953,7 @@ def analyze_image_endpoint(
         plan["shouldMove"] = format_should_move_as_strings(plan.get("shouldMove", []))
         return plan
 
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
     with get_session() as session:
-        used_24h = (
-            session.query(func.count(ApiUsageEvent.id))
-            .filter(
-                ApiUsageEvent.user_id == current_user.id,
-                ApiUsageEvent.endpoint == "analyze-image",
-                ApiUsageEvent.created_at >= since,
-            )
-            .scalar()
-            or 0
-        )
-        if used_24h >= DAILY_ANALYZE_IMAGE_CAP:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Daily image analysis limit reached ({DAILY_ANALYZE_IMAGE_CAP}/day).",
-            )
         session.add(ApiUsageEvent(user_id=current_user.id, endpoint="analyze-image"))
 
     try:

@@ -7,3 +7,17 @@ cd f:\Projects\sky-invites\backend
 
 cd f:\Projects\sky-invites\frontend
 npm run dev
+
+
+Deploy
+
+Firebase Hosting (frontend) : Manually build + deploy
+
+cd f:\Projects\sky-invites\frontend
+npm run build
+firebase deploy --only hosting
+
+
+Render (backend)
+
+Just push/commit

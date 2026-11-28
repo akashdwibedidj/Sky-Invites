@@ -12,7 +12,7 @@ from sqlalchemy import text
 from db import BusinessEnquiry, ContactMessage, get_session
 
 router = APIRouter(prefix="/api", tags=["leads"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, enabled=False)
 
 _CONTROL_CHARS_SINGLE = re.compile(r"[\x00-\x1f\x7f]")
 _CONTROL_CHARS_MULTI = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")

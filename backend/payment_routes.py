@@ -33,7 +33,7 @@ from pricing_config import PLANS_BY_ID, get_effective_pack_amount_paise
 logger = logging.getLogger("sky_invites_payments")
 
 router = APIRouter(tags=["payments"])
-_limiter = Limiter(key_func=get_remote_address)
+_limiter = Limiter(key_func=get_remote_address, enabled=False)
 
 RAZORPAY_ORDERS_URL = "https://api.razorpay.com/v1/orders"
 RAZORPAY_TIMEOUT_SECONDS = 15
