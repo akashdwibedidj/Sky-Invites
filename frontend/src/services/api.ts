@@ -189,10 +189,20 @@ function getSceneTextColor(imageUrl: string, paletteText: string): string {
  * 1. createScenes
  */
 export async function createScenes(invitation: Invitation): Promise<Scene[]> {
+  // Strip referencePhotos (base64 data URLs) before sending – they can easily
+  // exceed the 32 KB server limit and are not used by the backend at all.
+  const invitationPayload = {
+    ...invitation,
+    details: {
+      ...invitation.details,
+      referencePhotos: [],
+    },
+  };
+
   const res = await fetch(`${API_URL}/api/create-scenes`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ invitation }),
+    body: JSON.stringify({ invitation: invitationPayload }),
   });
 
   if (res.status === 401) { handle401(); throw new ApiError('Not authenticated', 401); }

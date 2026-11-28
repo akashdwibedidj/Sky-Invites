@@ -16,3 +16,7 @@ backend/backups/
 
 # Frontend build output
 frontend/dist/
+
+.agents/
+.claude/
+.firebase/

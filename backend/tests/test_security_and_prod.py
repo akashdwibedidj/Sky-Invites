@@ -212,30 +212,27 @@ def test_timed_out_generation_is_refunded_and_not_left_stuck():
 def test_analyze_image_daily_cap_and_create_scenes_rerun_cap():
     uid = "usr_sec_caps_2"
     token = _make_user(uid, "caps2@example.com")
-    inv_rerun = "inv_rerun_001"
-    inv_analyze = "inv_analyze_001"
+    inv_id = "inv_rerun_001"
     with db.get_session() as session:
-        session.add(db.Invitation(id=inv_rerun, user_id=uid, user_input={"type": "wedding"}, create_scenes_count=3))
-        session.add(db.Invitation(id=inv_analyze, user_id=uid, user_input={"type": "wedding"}, create_scenes_count=1))
-        session.add(db.Scene(invitation_id=inv_analyze, scene_index=0, status="done"))
+        session.add(db.Invitation(id=inv_id, user_id=uid, user_input={"type": "wedding"}, create_scenes_count=3))
+        session.add(db.Scene(invitation_id=inv_id, scene_index=0, status="done"))
         for _ in range(60):
             session.add(db.ApiUsageEvent(user_id=uid, endpoint="analyze-image"))
         session.flush()
 
-    storage.invitation_dir(inv_rerun).mkdir(parents=True, exist_ok=True)
-    storage.invitation_dir(inv_analyze).mkdir(parents=True, exist_ok=True)
+    storage.invitation_dir(inv_id).mkdir(parents=True, exist_ok=True)
     client = TestClient(api.app)
 
     r_rerun = client.post(
         "/api/create-scenes",
-        json={"invitation": {"id": inv_rerun, "type": "wedding", "title": "Rerun"}},
+        json={"invitation": {"id": inv_id, "type": "wedding", "title": "Rerun"}},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r_rerun.status_code == 429
 
     r_analyze = client.post(
         "/api/analyze-image",
-        json={"invitation_id": inv_analyze, "scene_index": 0},
+        json={"invitation_id": inv_id, "scene_index": 0},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r_analyze.status_code == 429
